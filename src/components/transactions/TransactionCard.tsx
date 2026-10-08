@@ -151,14 +151,15 @@ export default function TransactionCard({ transaction, onDeleted, onEdit, eurToI
                 <span>Attachment</span>
               </p>
               {transaction.image_url.startsWith('data:application/pdf') ? (
-                <a 
-                  href={transaction.image_url} 
-                  download={`receipt-${transaction.id.slice(0,6)}.pdf`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center justify-center p-4 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-100 transition-colors"
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowImage(true);
+                  }}
+                  className="w-full flex items-center justify-center p-4 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-100 transition-colors touch-target"
                 >
-                  Download PDF Receipt
-                </a>
+                  View PDF Document
+                </button>
               ) : (
                 <div className="max-h-48 overflow-hidden rounded-lg flex items-center justify-center bg-black/5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -213,13 +214,23 @@ export default function TransactionCard({ transaction, onDeleted, onEdit, eurToI
             setShowImage(false);
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img 
-            src={transaction.image_url} 
-            alt="Receipt Fullscreen" 
-            className="max-w-full max-h-[90vh] object-contain rounded-md"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {transaction.image_url.startsWith('data:application/pdf') ? (
+            <div className="w-full h-full max-w-4xl max-h-[90vh] bg-white rounded-xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <iframe 
+                src={transaction.image_url} 
+                className="w-full h-full border-none" 
+                title="PDF Fullscreen Preview" 
+              />
+            </div>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img 
+              src={transaction.image_url} 
+              alt="Receipt Fullscreen" 
+              className="max-w-full max-h-[90vh] object-contain rounded-md"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
           <button 
             className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 p-2 rounded-full text-white backdrop-blur-md"
             onClick={(e) => {

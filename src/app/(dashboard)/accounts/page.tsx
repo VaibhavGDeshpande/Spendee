@@ -30,9 +30,18 @@ export default function AccountsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddSourceModalOpen, setIsAddSourceModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
+  const [eurToInrRate, setEurToInrRate] = useState(91.5);
 
   useEffect(() => {
     loadAccountsData();
+    fetch('/api/rates')
+      .then(res => res.json())
+      .then(data => {
+        if (data.rate) {
+          setEurToInrRate(data.rate);
+        }
+      })
+      .catch(console.error);
   }, []);
 
   const loadAccountsData = async () => {
@@ -60,7 +69,7 @@ export default function AccountsPage() {
     const num = parseFloat(editingBalanceInput.replace(',', '.'));
     if (isNaN(num)) return;
 
-    await updateAccountBalance(accId, num);
+    await updateAccountBalance(accId, num, eurToInrRate);
     setEditingAccountId(null);
     loadAccountsData();
   };
@@ -195,7 +204,7 @@ export default function AccountsPage() {
                               setEditingAccountId(null);
                             } else {
                               setEditingAccountId(acc.id);
-                              setEditingBalanceInput(acc.balance.toString());
+                              setEditingBalanceInput(acc.currency === 'INR' ? (acc.balance * eurToInrRate).toString() : acc.balance.toString());
                             }
                           }}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg touch-target"
@@ -261,7 +270,7 @@ export default function AccountsPage() {
                           </span>
                           <p className="font-extrabold text-2xl sm:text-3xl text-slate-900 dark:text-white mt-0.5">
                             {acc.currency === 'EUR' ? '€' : acc.currency === 'INR' ? '₹' : acc.currency === 'USD' ? '$' : '£'}
-                            {acc.balance.toFixed(2)}
+                            {acc.currency === 'INR' ? (acc.balance * eurToInrRate).toFixed(2) : acc.balance.toFixed(2)}
                           </p>
                         </div>
                       )}
@@ -374,6 +383,7 @@ export default function AccountsPage() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={loadAccountsData}
+        eurToInrRate={eurToInrRate}
       />
 
       <AddAccountModal

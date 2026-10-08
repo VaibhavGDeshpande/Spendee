@@ -187,6 +187,41 @@ export default function TransactionsPage() {
           ))}
         </div>
 
+        {/* Summation of Selected State */}
+        {!loading && transactions.length > 0 && (
+          <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs">
+            <div className="flex flex-col">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Net Total</span>
+              <span className={`text-lg sm:text-xl font-bold ${
+                transactions.reduce((a, t) => t.type === 'income' ? a + t.amount_in_eur : t.type === 'expense' ? a - t.amount_in_eur : a, 0) > 0 
+                  ? 'text-emerald-500' 
+                  : transactions.reduce((a, t) => t.type === 'income' ? a + t.amount_in_eur : t.type === 'expense' ? a - t.amount_in_eur : a, 0) < 0 
+                    ? 'text-rose-500' 
+                    : 'text-slate-900 dark:text-white'
+              }`}>
+                {(() => {
+                  const net = transactions.reduce((a, t) => t.type === 'income' ? a + t.amount_in_eur : t.type === 'expense' ? a - t.amount_in_eur : a, 0);
+                  return net > 0 ? `+€${net.toFixed(2)}` : net < 0 ? `-€${Math.abs(net).toFixed(2)}` : '€0.00';
+                })()}
+              </span>
+            </div>
+            <div className="flex space-x-6 text-right">
+              <div>
+                <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Income</span>
+                <p className="text-sm sm:text-base font-bold text-emerald-500">
+                  €{transactions.reduce((acc, t) => t.type === 'income' ? acc + t.amount_in_eur : acc, 0).toFixed(2)}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">Expenses</span>
+                <p className="text-sm sm:text-base font-bold text-rose-500">
+                  €{transactions.reduce((acc, t) => t.type === 'expense' ? acc + t.amount_in_eur : acc, 0).toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Transaction Cards List */}
         <div className="space-y-2.5 pt-2">
           {loading ? (

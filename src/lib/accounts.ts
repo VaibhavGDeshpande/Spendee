@@ -21,6 +21,7 @@ export interface CreateAccountParams {
   currency?: string;
   balance?: number;
   icon?: string;
+  eurToInrRate?: number;
 }
 
 export async function createAccount(params: CreateAccountParams): Promise<{ success: boolean; data?: Account; error?: string }> {
@@ -61,7 +62,7 @@ export async function createAccount(params: CreateAccountParams): Promise<{ succ
     user_id: profile.id,
     name: nameTrimmed,
     currency: (params.currency || 'EUR').toUpperCase(),
-    balance: parseFloat((params.balance || 0).toFixed(2)),
+    balance: 0, // Set to 0 initially, updated by trigger
     is_system: false,
     icon: params.icon || 'wallet',
     created_at: now,
@@ -69,6 +70,35 @@ export async function createAccount(params: CreateAccountParams): Promise<{ succ
   };
 
   const success = await insertSupabaseAccount(newAccount);
+  
+  if (success && params.balance && params.balance > 0) {
+    let txId = '';
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      txId = crypto.randomUUID();
+    } else {
+      txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    }
+
+    const eurRate = params.eurToInrRate || 91.5;
+    const isINR = newAccount.currency === 'INR';
+    
+    await insertSupabaseTransaction({
+      account_id: newId,
+      category_id: null,
+      type: 'income',
+      amount: params.balance,
+      currency: newAccount.currency,
+      amount_in_eur: isINR ? params.balance / eurRate : params.balance,
+      exchange_rate_used: isINR ? 1 / eurRate : 1.0,
+      merchant: 'Initial Balance',
+      transaction_date: now.split('T')[0],
+    }, txId);
+  }
+
   if (success) {
     return { success: true, data: newAccount };
   }
@@ -93,13 +123,16 @@ export async function deleteAccount(accountId: string): Promise<{ success: boole
   return { success: false, error: 'Failed to delete account' };
 }
 
-export async function updateAccountBalance(accountId: string, newBalance: number): Promise<boolean> {
+export async function updateAccountBalance(accountId: string, newBalanceNative: number, eurToInrRate: number = 91.5): Promise<boolean> {
   const accounts = await fetchSupabaseAccounts() || [];
   const target = accounts.find((a) => a.id === accountId);
   if (!target) return false;
 
-  const diff = newBalance - target.balance;
-  if (diff === 0) return true; // No change needed
+  const isINR = target.currency === 'INR';
+  const currentBalanceNative = isINR ? target.balance * eurToInrRate : target.balance;
+  
+  const diffNative = newBalanceNative - currentBalanceNative;
+  if (Math.abs(diffNative) < 0.01) return true; // No change needed
 
   let txId = '';
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -116,11 +149,11 @@ export async function updateAccountBalance(accountId: string, newBalance: number
   const success = await insertSupabaseTransaction({
     account_id: accountId,
     category_id: null,
-    type: diff > 0 ? 'income' : 'expense',
-    amount: Math.abs(diff),
+    type: diffNative > 0 ? 'income' : 'expense',
+    amount: Math.abs(diffNative),
     currency: target.currency,
-    amount_in_eur: Math.abs(diff),
-    exchange_rate_used: 1.0,
+    amount_in_eur: isINR ? Math.abs(diffNative) / eurToInrRate : Math.abs(diffNative),
+    exchange_rate_used: isINR ? 1 / eurToInrRate : 1.0,
     merchant: 'Balance Adjustment',
     transaction_date: new Date().toISOString().split('T')[0],
   }, txId);

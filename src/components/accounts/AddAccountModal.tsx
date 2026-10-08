@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, PlusCircle, Sparkles, AlertCircle } from 'lucide-react';
 import { createAccount } from '@/lib/accounts';
 import { ACCOUNT_ICON_OPTIONS } from '@/lib/utils/accountIcons';
@@ -29,6 +29,20 @@ export default function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccou
   const [icon, setIcon] = useState('wallet');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [eurToInrRate, setEurToInrRate] = useState(91.5);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/rates')
+        .then(res => res.json())
+        .then(data => {
+          if (data.rate) {
+            setEurToInrRate(data.rate);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -42,12 +56,13 @@ export default function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccou
     setLoading(true);
     setError(null);
 
-    const initialBalanceNum = parseFloat(balance) || 0.0;
+    const initialBalanceNum = parseFloat(balance.replace(',', '.')) || 0.0;
     const res = await createAccount({
       name,
       currency,
       balance: initialBalanceNum,
       icon,
+      eurToInrRate,
     });
 
     setLoading(false);
@@ -164,11 +179,16 @@ export default function AddAccountModal({ isOpen, onClose, onSuccess }: AddAccou
                 Starting Balance
               </label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={balance}
-                onChange={(e) => setBalance(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                    setBalance(val);
+                  }
+                }}
                 className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none"
               />
             </div>

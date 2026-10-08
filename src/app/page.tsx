@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [monthlyExpense, setMonthlyExpense] = useState<number>(0);
   const [categoryBreakdown, setCategoryBreakdown] = useState<{ name: string; amount: number; color: string }[]>([]);
   const [allowance, setAllowance] = useState<number>(992);
+  const [blockedAccountExpense, setBlockedAccountExpense] = useState<number>(0);
   
   const [loading, setLoading] = useState<boolean>(true);
   const [showConverter, setShowConverter] = useState<boolean>(false);
@@ -68,8 +69,12 @@ export default function DashboardPage() {
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
 
+    const blockedAcc = accs.find(a => a.name === 'Blocked Account' && a.is_system);
+    const blockedAccId = blockedAcc?.id;
+
     let inc = 0;
     let exp = 0;
+    let blockedExp = 0;
     const catMap: Record<string, { amount: number; color: string }> = {};
 
     currentMonthTxs.forEach((t) => {
@@ -77,15 +82,21 @@ export default function DashboardPage() {
         inc += t.amount_in_eur;
       } else if (t.type === 'expense') {
         exp += t.amount_in_eur;
+        if (t.account_id === blockedAccId) {
+          blockedExp += t.amount_in_eur;
+        }
         const catName = t.category?.name || 'Other';
         const color = t.category?.color || '#6366f1';
         if (!catMap[catName]) catMap[catName] = { amount: 0, color };
         catMap[catName].amount += t.amount_in_eur;
+      } else if (t.type === 'transfer' && t.account_id === blockedAccId) {
+        blockedExp += t.amount_in_eur;
       }
     });
 
     setMonthlyIncome(inc);
     setMonthlyExpense(exp);
+    setBlockedAccountExpense(blockedExp);
 
     const sortedCats = Object.entries(catMap)
       .map(([name, data]) => ({ name, amount: data.amount, color: data.color }))
@@ -236,12 +247,12 @@ export default function DashboardPage() {
               </div>
               <div className="border-x border-emerald-500/30">
                 <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Spent</p>
-                <p className="text-lg sm:text-2xl font-bold">€{monthlyExpense.toFixed(2)}</p>
+                <p className="text-lg sm:text-2xl font-bold">€{blockedAccountExpense.toFixed(2)}</p>
               </div>
               <div>
                 <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Left to Spend</p>
-                <p className={`text-lg sm:text-2xl font-bold ${(allowance - monthlyExpense) < 0 ? 'text-red-300' : 'text-white'}`}>
-                  €{(allowance - monthlyExpense).toFixed(2)}
+                <p className={`text-lg sm:text-2xl font-bold ${(allowance - blockedAccountExpense) < 0 ? 'text-red-300' : 'text-white'}`}>
+                  €{(allowance - blockedAccountExpense).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -250,11 +261,11 @@ export default function DashboardPage() {
               <div className="h-2.5 w-full bg-black/20 rounded-full overflow-hidden">
                 <div 
                   className={`h-full transition-all ${
-                    (monthlyExpense / allowance) > 0.9 ? 'bg-red-400' 
-                    : (monthlyExpense / allowance) > 0.75 ? 'bg-yellow-400' 
+                    (blockedAccountExpense / allowance) > 0.9 ? 'bg-red-400' 
+                    : (blockedAccountExpense / allowance) > 0.75 ? 'bg-yellow-400' 
                     : 'bg-white'
                   }`}
-                  style={{ width: `${Math.min((monthlyExpense / (allowance || 1)) * 100, 100)}%` }}
+                  style={{ width: `${Math.min((blockedAccountExpense / (allowance || 1)) * 100, 100)}%` }}
                 />
               </div>
             </div>
@@ -311,7 +322,7 @@ export default function DashboardPage() {
                         </p>
                         <p className="text-xl font-extrabold text-slate-900 dark:text-white mt-0.5">
                           {acc.currency === 'EUR' ? '€' : acc.currency === 'INR' ? '₹' : acc.currency === 'USD' ? '$' : '£'}
-                          {acc.balance.toFixed(2)}
+                          {acc.currency === 'INR' ? (acc.balance * eurToInrRate).toFixed(2) : acc.balance.toFixed(2)}
                         </p>
                         {acc.currency === 'EUR' && eurToInrRate > 0 && (
                           <p className="text-[10px] font-medium text-slate-400 mt-0.5">

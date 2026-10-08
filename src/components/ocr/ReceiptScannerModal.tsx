@@ -41,7 +41,7 @@ export default function ReceiptScannerModal({
         }
         const b64 = await fileToBase64(file);
         setBase64Data(b64);
-        setPreviewUrl('pdf');
+        setPreviewUrl(b64);
       } else {
         setPreviewUrl(URL.createObjectURL(file));
         // Client-side Image Compression
@@ -148,12 +148,9 @@ export default function ReceiptScannerModal({
         ) : (
           <div className="space-y-4">
             {/* Image Preview */}
-            <div className="relative h-48 bg-slate-100 dark:bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
-              {previewUrl === 'pdf' ? (
-                <div className="flex flex-col items-center justify-center space-y-2 text-slate-500">
-                  <FileText className="w-12 h-12 text-indigo-400" />
-                  <span className="font-semibold text-sm">PDF Attached</span>
-                </div>
+            <div className="relative h-64 bg-slate-100 dark:bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
+              {previewUrl?.startsWith('data:application/pdf') ? (
+                <iframe src={previewUrl} className="w-full h-full border-none" title="PDF Preview" />
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={previewUrl as string} alt="Receipt preview" className="object-contain h-full w-full" />
