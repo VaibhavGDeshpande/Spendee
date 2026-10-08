@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import imageCompression from 'browser-image-compression';
-import { Camera, Upload, Sparkles, X, Check, AlertCircle } from 'lucide-react';
+import { Camera, Upload, X, Check, AlertCircle, FileText } from 'lucide-react';
 import { OCRResult } from '@/types';
 
 interface ReceiptScannerModalProps {
@@ -33,21 +33,30 @@ export default function ReceiptScannerModal({
   const handleFileSelected = async (file: File) => {
     setLoading(true);
     setError(null);
-    setPreviewUrl(URL.createObjectURL(file));
 
     try {
-      // 1. Client-side Image Compression
-      const options = {
-        maxSizeMB: 0.5,
-        maxWidthOrHeight: 1200,
-        useWebWorker: true,
-      };
+      if (file.type === 'application/pdf') {
+        if (file.size > 2 * 1024 * 1024) {
+          throw new Error('PDF file size must be less than 2MB');
+        }
+        const b64 = await fileToBase64(file);
+        setBase64Data(b64);
+        setPreviewUrl('pdf');
+      } else {
+        setPreviewUrl(URL.createObjectURL(file));
+        // Client-side Image Compression
+        const options = {
+          maxSizeMB: 0.5,
+          maxWidthOrHeight: 1200,
+          useWebWorker: true,
+        };
 
-      const compressedFile = await imageCompression(file, options);
-      const b64 = await fileToBase64(compressedFile);
-      setBase64Data(b64);
+        const compressedFile = await imageCompression(file, options);
+        const b64 = await fileToBase64(compressedFile);
+        setBase64Data(b64);
+      }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error attaching photo';
+      const msg = err instanceof Error ? err.message : 'Error attaching file';
       setError(msg);
     } finally {
       setLoading(false);
@@ -77,7 +86,7 @@ export default function ReceiptScannerModal({
               <Camera className="w-4 h-4" />
             </div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              Attach Receipt Photo
+              Attach Receipt / PDF
             </h2>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
@@ -98,10 +107,10 @@ export default function ReceiptScannerModal({
             <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-6 text-center hover:border-indigo-500 transition-colors">
               <Camera className="w-10 h-10 text-indigo-500 mx-auto mb-2" />
               <p className="font-semibold text-sm text-slate-800 dark:text-slate-200">
-                Capture or Upload Photo
+                Capture Photo or Upload File
               </p>
               <p className="text-xs text-slate-400 mt-1">
-                Attach a copy of your receipt to this transaction
+                Attach a copy of your receipt (Image or PDF)
               </p>
 
               <div className="flex justify-center gap-3 mt-4">
@@ -126,7 +135,7 @@ export default function ReceiptScannerModal({
                   <span>Upload File</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf"
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files?.[0]) handleFileSelected(e.target.files[0]);
@@ -140,8 +149,15 @@ export default function ReceiptScannerModal({
           <div className="space-y-4">
             {/* Image Preview */}
             <div className="relative h-48 bg-slate-100 dark:bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewUrl} alt="Receipt preview" className="object-contain h-full w-full" />
+              {previewUrl === 'pdf' ? (
+                <div className="flex flex-col items-center justify-center space-y-2 text-slate-500">
+                  <FileText className="w-12 h-12 text-indigo-400" />
+                  <span className="font-semibold text-sm">PDF Attached</span>
+                </div>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={previewUrl as string} alt="Receipt preview" className="object-contain h-full w-full" />
+              )}
 
               {loading && (
                 <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-2">

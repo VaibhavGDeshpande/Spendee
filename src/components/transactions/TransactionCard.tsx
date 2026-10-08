@@ -144,25 +144,35 @@ export default function TransactionCard({ transaction, onDeleted, onEdit, eurToI
             </div>
           )}
 
-          {/* Receipt Photo */}
           {transaction.image_url && (
             <div className="space-y-1 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl">
               <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center space-x-1 mb-2">
                 <Camera className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Receipt Photo</span>
+                <span>Attachment</span>
               </p>
-              <div className="max-h-48 overflow-hidden rounded-lg flex items-center justify-center bg-black/5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
-                  src={transaction.image_url} 
-                  alt="Receipt" 
-                  className="object-contain max-h-48 w-full rounded-lg cursor-zoom-in"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowImage(true);
-                  }}
-                />
-              </div>
+              {transaction.image_url.startsWith('data:application/pdf') ? (
+                <a 
+                  href={transaction.image_url} 
+                  download={`receipt-${transaction.id.slice(0,6)}.pdf`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center justify-center p-4 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-100 transition-colors"
+                >
+                  Download PDF Receipt
+                </a>
+              ) : (
+                <div className="max-h-48 overflow-hidden rounded-lg flex items-center justify-center bg-black/5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img 
+                    src={transaction.image_url} 
+                    alt="Receipt" 
+                    className="object-contain max-h-48 w-full rounded-lg cursor-zoom-in"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowImage(true);
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 
