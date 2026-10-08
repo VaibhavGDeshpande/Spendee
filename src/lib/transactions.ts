@@ -119,6 +119,7 @@ export async function createTransaction(
       ...params,
       type: 'transfer',
       merchant: params.merchant || `Transfer to ${destAccount.name}`,
+      transfer_transaction_id: destTxId,
     }, txId);
 
     // Dest
@@ -135,6 +136,7 @@ export async function createTransaction(
       notes: params.notes || undefined,
       image_url: params.image_url || undefined,
       transfer_account_id: account.id,
+      transfer_transaction_id: txId,
     }, destTxId);
 
     return { success: sourceSuccess && destSuccess };

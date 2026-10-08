@@ -37,6 +37,7 @@ export interface CreateTransactionParams {
   notes?: string;
   image_url?: string;
   transfer_account_id?: string;
+  transfer_transaction_id?: string;
   line_items?: ScannedLineItem[];
 }
 

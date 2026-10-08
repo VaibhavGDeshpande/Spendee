@@ -277,6 +277,7 @@ export async function insertSupabaseTransaction(params: CreateTransactionParams,
       notes: params.notes || null,
       image_url: params.image_url || null,
       transfer_account_id: params.transfer_account_id || null,
+      transfer_transaction_id: params.transfer_transaction_id || null,
     } as any);
 
     if (error) {
