@@ -1,10 +1,15 @@
 import { Category, TransactionWithDetails, CreateTransactionParams } from '@/types';
-import { getLocalDatabase, saveLocalDatabase } from './storage/localStore';
-import { generateUUID } from './sync';
+import {
+  fetchSupabaseCategories,
+  fetchSupabaseTransactions,
+  insertSupabaseTransaction,
+  deleteSupabaseTransaction,
+  fetchSupabaseAccounts,
+} from './supabase/db';
 
 export async function getCategories(): Promise<Category[]> {
-  const db = getLocalDatabase();
-  return db.categories;
+  const cats = await fetchSupabaseCategories();
+  return cats || [];
 }
 
 export interface TransactionFilter {
@@ -18,8 +23,7 @@ export interface TransactionFilter {
 }
 
 export async function getTransactions(filter?: TransactionFilter): Promise<TransactionWithDetails[]> {
-  const db = getLocalDatabase();
-  let list = [...db.transactions];
+  let list = await fetchSupabaseTransactions() || [];
 
   if (filter?.accountId) {
     list = list.filter(
@@ -69,19 +73,23 @@ export async function getTransactions(filter?: TransactionFilter): Promise<Trans
 export async function createTransaction(
   params: CreateTransactionParams
 ): Promise<{ success: boolean; data?: any; error?: string }> {
-  const db = getLocalDatabase();
-
-  const account = db.accounts.find((a) => a.id === params.account_id);
+  
+  const accounts = await fetchSupabaseAccounts() || [];
+  const account = accounts.find((a) => a.id === params.account_id);
   if (!account) {
     return { success: false, error: 'Account not found' };
   }
 
-  const category = params.category_id
-    ? db.categories.find((c) => c.id === params.category_id)
-    : null;
-
-  const now = new Date().toISOString();
-  const txId = generateUUID();
+  let txId = '';
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    txId = crypto.randomUUID();
+  } else {
+    txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
 
   // Handle Transfer logic
   if (params.type === 'transfer') {
@@ -89,42 +97,32 @@ export async function createTransaction(
       return { success: false, error: 'Destination account required for transfers' };
     }
 
-    const destAccount = db.accounts.find((a) => a.id === params.transfer_account_id);
+    const destAccount = accounts.find((a) => a.id === params.transfer_account_id);
     if (!destAccount) {
       return { success: false, error: 'Destination account not found' };
     }
 
-    const destTxId = generateUUID();
+    let destTxId = '';
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      destTxId = crypto.randomUUID();
+    } else {
+      destTxId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    }
 
-    // Source Tx
-    const sourceTx: TransactionWithDetails = {
-      id: txId,
-      user_id: db.profile.id,
-      account_id: account.id,
-      account,
-      category_id: null,
+    // Source
+    const sourceSuccess = await insertSupabaseTransaction({
+      ...params,
       type: 'transfer',
-      amount: params.amount,
-      currency: params.currency,
-      amount_in_eur: params.amount_in_eur,
-      exchange_rate_used: params.exchange_rate_used || 1.0,
       merchant: params.merchant || `Transfer to ${destAccount.name}`,
-      transaction_date: params.transaction_date,
-      notes: params.notes || null,
-      image_url: params.image_url || null,
-      transfer_account_id: destAccount.id,
-      transfer_account: destAccount,
-      transfer_transaction_id: destTxId,
-      created_at: now,
-      updated_at: now,
-    };
+    }, txId);
 
-    // Dest Tx
-    const destTx: TransactionWithDetails = {
-      id: destTxId,
-      user_id: db.profile.id,
+    // Dest
+    const destSuccess = await insertSupabaseTransaction({
       account_id: destAccount.id,
-      account: destAccount,
       category_id: null,
       type: 'income',
       amount: params.amount_in_eur,
@@ -133,113 +131,30 @@ export async function createTransaction(
       exchange_rate_used: 1.0,
       merchant: `Transfer from ${account.name}`,
       transaction_date: params.transaction_date,
-      notes: params.notes || null,
-      image_url: params.image_url || null,
+      notes: params.notes || undefined,
+      image_url: params.image_url || undefined,
       transfer_account_id: account.id,
-      transfer_account: account,
-      transfer_transaction_id: txId,
-      created_at: now,
-      updated_at: now,
-    };
+    }, destTxId);
 
-    db.transactions.unshift(sourceTx, destTx);
-    saveLocalDatabase(db);
-
-    // Sync to Supabase in the background
-    import('./supabase/db').then(({ insertSupabaseTransaction }) => {
-      // Source
-      insertSupabaseTransaction({
-        ...params,
-        type: 'transfer',
-        merchant: params.merchant || `Transfer to ${destAccount.name}`,
-      }, txId).catch(console.error);
-
-      // Dest
-      insertSupabaseTransaction({
-        account_id: destAccount.id,
-        category_id: null,
-        type: 'income',
-        amount: params.amount_in_eur,
-        currency: 'EUR',
-        amount_in_eur: params.amount_in_eur,
-        exchange_rate_used: 1.0,
-        merchant: `Transfer from ${account.name}`,
-        transaction_date: params.transaction_date,
-        notes: params.notes || undefined,
-        image_url: params.image_url || undefined,
-        transfer_account_id: account.id,
-      }, destTxId).catch(console.error);
-    });
-
-    return { success: true, data: sourceTx };
+    return { success: sourceSuccess && destSuccess };
   }
 
   // Normal Expense or Income
-  const newTx: TransactionWithDetails = {
-    id: txId,
-    user_id: db.profile.id,
-    account_id: account.id,
-    account,
-    category_id: category?.id || null,
-    category,
-    type: params.type,
-    amount: params.amount,
-    currency: params.currency,
-    amount_in_eur: params.amount_in_eur,
-    exchange_rate_used: params.exchange_rate_used || 1.0,
-    merchant: params.merchant || null,
-    transaction_date: params.transaction_date,
-    notes: params.notes || null,
-    image_url: params.image_url || null,
-    transfer_account_id: null,
-    transfer_transaction_id: null,
-    items: params.line_items?.map((item: any, idx: number) => ({
-      id: `item-${Date.now()}-${idx}`,
-      transaction_id: txId,
-      item_name: item.item_name,
-      unit_price: item.unit_price || null,
-      quantity: item.quantity || 1,
-      total_price: item.total_price,
-      created_at: now,
-    })),
-    created_at: now,
-    updated_at: now,
-  };
-
-  db.transactions.unshift(newTx);
-  saveLocalDatabase(db);
-
-  // Sync to Supabase in the background (fire and forget for UI responsiveness)
-  import('./supabase/db').then(({ insertSupabaseTransaction }) => {
-    insertSupabaseTransaction(params, txId).catch(console.error);
-  });
-
-  return { success: true, data: newTx };
+  const success = await insertSupabaseTransaction(params, txId);
+  return { success };
 }
 
 export async function deleteTransaction(id: string): Promise<boolean> {
-  const db = getLocalDatabase();
-
-  const target = db.transactions.find((t) => t.id === id);
+  const transactions = await fetchSupabaseTransactions() || [];
+  const target = transactions.find((t) => t.id === id);
   if (!target) return false;
 
+  const success1 = await deleteSupabaseTransaction(id);
+  let success2 = true;
+  
   if (target.transfer_transaction_id) {
-    db.transactions = db.transactions.filter(
-      (t) => t.id !== id && t.id !== target.transfer_transaction_id
-    );
-  } else {
-    db.transactions = db.transactions.filter((t) => t.id !== id);
+    success2 = await deleteSupabaseTransaction(target.transfer_transaction_id);
   }
-
-  saveLocalDatabase(db);
-
-  // Sync deletion to Supabase
-  import('./supabase/db').then(({ deleteSupabaseTransaction }) => {
-    deleteSupabaseTransaction(id).catch(console.error);
-    if (target.transfer_transaction_id) {
-      deleteSupabaseTransaction(target.transfer_transaction_id).catch(console.error);
-    }
-  });
-
-  return true;
+  
+  return success1 && success2;
 }

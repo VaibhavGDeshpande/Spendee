@@ -9,7 +9,6 @@ import AddAccountModal from '@/components/accounts/AddAccountModal';
 import { Account, Profile } from '@/types';
 import { getUserAccounts, getUserProfile, claimMonthlyAllowance, updateProfileAllowance, updateAccountBalance, deleteAccount } from '@/lib/accounts';
 import { getAccountIconComponent } from '@/lib/utils/accountIcons';
-import { syncFromSupabase } from '@/lib/sync';
 import { Landmark, CheckCircle2, AlertCircle, Edit2, Check, X, Plus, Trash2 } from 'lucide-react';
 
 export default function AccountsPage() {
@@ -38,8 +37,6 @@ export default function AccountsPage() {
 
   const loadAccountsData = async () => {
     setLoading(true);
-    // Pull fresh data from Supabase first (cross-device sync)
-    await syncFromSupabase();
     const [accs, prof] = await Promise.all([getUserAccounts(), getUserProfile()]);
     setAccounts(accs);
     setProfile(prof);

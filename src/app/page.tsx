@@ -12,7 +12,6 @@ import { Account, TransactionWithDetails } from '@/types';
 import { getUserAccounts } from '@/lib/accounts';
 import { getTransactions } from '@/lib/transactions';
 import { getAccountIconComponent } from '@/lib/utils/accountIcons';
-import { syncFromSupabase } from '@/lib/sync';
 import { ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 
@@ -36,8 +35,6 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     setLoading(true);
-    // Pull data from Supabase first (enables cross-device sync)
-    await syncFromSupabase();
     const [accs, txs] = await Promise.all([
       getUserAccounts(),
       getTransactions({ limit: 50 }),

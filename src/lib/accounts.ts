@@ -1,10 +1,19 @@
 import { Account, Profile } from '@/types';
-import { getLocalDatabase, saveLocalDatabase, updateAccountDirectBalance } from './storage/localStore';
-import { generateUUID } from './sync';
+import {
+  fetchSupabaseAccounts,
+  insertSupabaseAccount,
+  deleteSupabaseAccount,
+  updateSupabaseAccountBalance,
+  fetchSupabaseProfile,
+  updateSupabaseProfileAllowance,
+  insertSupabaseTransaction,
+  fetchSupabaseTransactions,
+  fetchSupabaseCategories,
+} from './supabase/db';
 
 export async function getUserAccounts(): Promise<Account[]> {
-  const db = getLocalDatabase();
-  return db.accounts;
+  const accounts = await fetchSupabaseAccounts();
+  return accounts || [];
 }
 
 export interface CreateAccountParams {
@@ -15,22 +24,41 @@ export interface CreateAccountParams {
 }
 
 export async function createAccount(params: CreateAccountParams): Promise<{ success: boolean; data?: Account; error?: string }> {
-  const db = getLocalDatabase();
   const nameTrimmed = params.name.trim();
 
   if (!nameTrimmed) {
     return { success: false, error: 'Account/Source name is required' };
   }
 
-  const existing = db.accounts.find((a) => a.name.toLowerCase() === nameTrimmed.toLowerCase());
+  const accounts = await fetchSupabaseAccounts() || [];
+  const existing = accounts.find((a) => a.name.toLowerCase() === nameTrimmed.toLowerCase());
   if (existing) {
     return { success: false, error: 'An account with this name already exists' };
   }
 
   const now = new Date().toISOString();
+  
+  // We need the user's ID
+  const profile = await fetchSupabaseProfile();
+  if (!profile) {
+    return { success: false, error: 'User profile not found' };
+  }
+
+  // Generate UUID in browser natively
+  let newId = '';
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    newId = crypto.randomUUID();
+  } else {
+    newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
   const newAccount: Account = {
-    id: generateUUID(),
-    user_id: db.profile.id,
+    id: newId,
+    user_id: profile.id,
     name: nameTrimmed,
     currency: (params.currency || 'EUR').toUpperCase(),
     balance: parseFloat((params.balance || 0).toFixed(2)),
@@ -40,62 +68,52 @@ export async function createAccount(params: CreateAccountParams): Promise<{ succ
     updated_at: now,
   };
 
-  db.accounts.push(newAccount);
-  saveLocalDatabase(db);
-
-  // Sync to Supabase in the background
-  import('./supabase/db').then(({ insertSupabaseAccount }) => {
-    insertSupabaseAccount(newAccount).catch(console.error);
-  });
-
-  return { success: true, data: newAccount };
+  const success = await insertSupabaseAccount(newAccount);
+  if (success) {
+    return { success: true, data: newAccount };
+  }
+  return { success: false, error: 'Failed to create account in database' };
 }
 
 export async function deleteAccount(accountId: string): Promise<{ success: boolean; error?: string }> {
-  const db = getLocalDatabase();
-  const accIndex = db.accounts.findIndex((a) => a.id === accountId);
-  if (accIndex === -1) {
+  const accounts = await fetchSupabaseAccounts() || [];
+  const targetAccount = accounts.find((a) => a.id === accountId);
+  if (!targetAccount) {
     return { success: false, error: 'Account not found' };
   }
 
-  if (db.accounts[accIndex].is_system) {
+  if (targetAccount.is_system) {
     return { success: false, error: 'Core system accounts cannot be deleted' };
   }
 
-  db.accounts.splice(accIndex, 1);
-  saveLocalDatabase(db);
-
-  // Sync deletion to Supabase
-  import('./supabase/db').then(({ deleteSupabaseAccount }) => {
-    deleteSupabaseAccount(accountId).catch(console.error);
-  });
-
-  return { success: true };
+  const success = await deleteSupabaseAccount(accountId);
+  if (success) {
+    return { success: true };
+  }
+  return { success: false, error: 'Failed to delete account' };
 }
 
 export async function updateAccountBalance(accountId: string, newBalance: number): Promise<boolean> {
-  updateAccountDirectBalance(accountId, newBalance);
-  return true;
+  return updateSupabaseAccountBalance(accountId, newBalance);
 }
 
 export async function getUserProfile(): Promise<Profile | null> {
-  const db = getLocalDatabase();
-  return db.profile;
+  return fetchSupabaseProfile();
 }
 
 export async function updateProfileAllowance(allowanceEur: number): Promise<boolean> {
-  const db = getLocalDatabase();
-  db.profile.blocked_allowance_eur = allowanceEur;
-  db.profile.updated_at = new Date().toISOString();
-  saveLocalDatabase(db);
-  return true;
+  return updateSupabaseProfileAllowance(allowanceEur);
 }
 
 export async function claimMonthlyAllowance(): Promise<{ success: boolean; message: string }> {
-  const db = getLocalDatabase();
-  const allowanceAmount = db.profile.blocked_allowance_eur || 992.00;
+  const profile = await fetchSupabaseProfile();
+  if (!profile) {
+    return { success: false, message: 'Profile not found' };
+  }
+  const allowanceAmount = profile.blocked_allowance_eur || 992.00;
 
-  const blockedAcc = db.accounts.find((a) => a.name === 'Blocked Account');
+  const accounts = await fetchSupabaseAccounts() || [];
+  const blockedAcc = accounts.find((a) => a.name === 'Blocked Account');
   if (!blockedAcc) {
     return { success: false, message: 'Blocked Account not found' };
   }
@@ -103,8 +121,9 @@ export async function claimMonthlyAllowance(): Promise<{ success: boolean; messa
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+  const transactions = await fetchSupabaseTransactions() || [];
   // Check if allowance already claimed this month
-  const alreadyClaimed = db.transactions.some(
+  const alreadyClaimed = transactions.some(
     (t) =>
       t.account_id === blockedAcc.id &&
       t.type === 'income' &&
@@ -119,51 +138,45 @@ export async function claimMonthlyAllowance(): Promise<{ success: boolean; messa
     };
   }
 
-  const allowanceCat = db.categories.find((c) => c.name.includes('Allowance')) || db.categories[0];
+  const categories = await fetchSupabaseCategories();
+  const allowanceCat = categories.find((c) => c.name.includes('Allowance')) || categories[0];
 
-  const txId = generateUUID();
-  const newTx: any = {
-    id: txId,
-    user_id: db.profile.id,
+  let txId = '';
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    txId = crypto.randomUUID();
+  } else {
+    txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  const txDateStr = now.toISOString().split('T')[0];
+  const merchantStr = `Monthly Allowance - ${now.toLocaleString('default', { month: 'long', year: 'numeric' })}`;
+
+  // Insert to supabase
+  const success = await insertSupabaseTransaction({
     account_id: blockedAcc.id,
-    account: blockedAcc,
-    category_id: allowanceCat.id,
-    category: allowanceCat,
+    category_id: allowanceCat?.id || null,
     type: 'income',
     amount: allowanceAmount,
     currency: 'EUR',
     amount_in_eur: allowanceAmount,
     exchange_rate_used: 1.0,
-    merchant: `Monthly Allowance - ${now.toLocaleString('default', { month: 'long', year: 'numeric' })}`,
-    transaction_date: now.toISOString().split('T')[0],
+    merchant: merchantStr,
+    transaction_date: txDateStr,
     notes: 'Automated monthly allowance payout from Blocked Account',
-    created_at: now.toISOString(),
-    updated_at: now.toISOString(),
-  };
+  }, txId);
 
-  // Add transaction and update blocked account balance
-  db.transactions.unshift(newTx);
-  blockedAcc.balance = parseFloat((blockedAcc.balance + allowanceAmount).toFixed(2));
-  saveLocalDatabase(db);
+  if (success) {
+    // Also update the balance on the blocked account explicitly, although trigger might handle it.
+    // The DB has a trigger 'recalculate_account_balance' so it will handle updating balance automatically.
+    return {
+      success: true,
+      message: `Successfully claimed €${allowanceAmount.toFixed(2)} allowance!`,
+    };
+  }
 
-  // Sync to Supabase in background
-  import('./supabase/db').then(({ insertSupabaseTransaction }) => {
-    insertSupabaseTransaction({
-      account_id: blockedAcc.id,
-      category_id: allowanceCat.id,
-      type: 'income',
-      amount: allowanceAmount,
-      currency: 'EUR',
-      amount_in_eur: allowanceAmount,
-      exchange_rate_used: 1.0,
-      merchant: newTx.merchant,
-      transaction_date: newTx.transaction_date,
-      notes: newTx.notes,
-    }, txId).catch(console.error);
-  });
-
-  return {
-    success: true,
-    message: `Successfully claimed €${allowanceAmount.toFixed(2)} allowance!`,
-  };
+  return { success: false, message: 'Failed to claim allowance' };
 }

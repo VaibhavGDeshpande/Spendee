@@ -1,7 +1,5 @@
 import { createClient } from './client';
 import { Account, Category, Profile, TransactionWithDetails, CreateTransactionParams } from '@/types';
-import { getLocalDatabase, saveLocalDatabase } from '../storage/localStore';
-
 export function isSupabaseConnected(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -31,16 +29,34 @@ export async function fetchSupabaseAccounts(): Promise<Account[] | null> {
       return null;
     }
     if (!data) return null;
-    if (data.length === 0) return data as Account[];
-
-    // Cache locally
-    const local = getLocalDatabase();
-    local.accounts = data as Account[];
-    saveLocalDatabase(local);
+    if (data.length === 0) return [];
 
     return data as Account[];
   } catch {
     return null;
+  }
+}
+
+export async function updateSupabaseAccountBalance(accountId: string, newBalance: number): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await (supabase.from('accounts') as any)
+      .update({ balance: newBalance, updated_at: new Date().toISOString() })
+      .eq('id', accountId)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[updateSupabaseAccountBalance] error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[updateSupabaseAccountBalance] caught:', err);
+    return false;
   }
 }
 
@@ -91,6 +107,95 @@ export async function deleteSupabaseAccount(accountId: string): Promise<boolean>
   } catch (err) {
     console.error('[deleteSupabaseAccount] caught:', err);
     return false;
+  }
+}
+
+// ==========================================
+// PROFILE SUPABASE DB SERVICES
+// ==========================================
+
+export async function fetchSupabaseProfile(): Promise<Profile | null> {
+  if (!isSupabaseConnected()) return null;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[fetchSupabaseProfile]', error);
+      return null;
+    }
+    
+    if (data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = data as any;
+        return {
+          id: p.id,
+          email: p.email,
+          blocked_allowance_eur: p.blocked_allowance_eur ?? 992.0,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+        } as Profile;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateSupabaseProfileAllowance(allowanceEur: number): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await (supabase.from('profiles') as any)
+      .update({ blocked_allowance_eur: allowanceEur, updated_at: new Date().toISOString() })
+      .eq('id', user.id);
+
+    if (error) {
+      console.error('[updateSupabaseProfileAllowance] error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[updateSupabaseProfileAllowance] caught:', err);
+    return false;
+  }
+}
+
+// ==========================================
+// CATEGORIES SUPABASE DB SERVICES
+// ==========================================
+
+export async function fetchSupabaseCategories(): Promise<Category[]> {
+  if (!isSupabaseConnected()) return [];
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .or(`user_id.eq.${user.id},user_id.is.null`);
+
+    if (error) {
+      console.error('[fetchSupabaseCategories]', error);
+      return [];
+    }
+
+    return (data || []) as Category[];
+  } catch {
+    return [];
   }
 }
 

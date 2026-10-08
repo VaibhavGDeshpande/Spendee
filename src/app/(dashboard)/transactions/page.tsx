@@ -9,7 +9,6 @@ import AddTransactionModal from '@/components/transactions/AddTransactionModal';
 import { Account, Category, TransactionWithDetails } from '@/types';
 import { getTransactions, getCategories } from '@/lib/transactions';
 import { getUserAccounts } from '@/lib/accounts';
-import { syncFromSupabase } from '@/lib/sync';
 import { Search, Filter } from 'lucide-react';
 
 export default function TransactionsPage() {
@@ -36,8 +35,6 @@ export default function TransactionsPage() {
   }, [selectedAccountId, selectedCategoryId, selectedType, searchQuery]);
 
   const loadFilterData = async () => {
-    // Pull fresh data from Supabase first
-    await syncFromSupabase();
     const [accs, cats] = await Promise.all([getUserAccounts(), getCategories()]);
     setAccounts(accs);
     setCategories(cats);
