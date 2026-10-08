@@ -47,7 +47,7 @@ export default function AccountsPage() {
   };
 
   const handleSaveAllowance = async () => {
-    const num = parseFloat(allowanceInput);
+    const num = parseFloat(allowanceInput.replace(',', '.'));
     if (!num || num <= 0) return;
     const success = await updateProfileAllowance(num);
     if (success) {
@@ -57,7 +57,7 @@ export default function AccountsPage() {
   };
 
   const handleSaveAccountBalance = async (accId: string) => {
-    const num = parseFloat(editingBalanceInput);
+    const num = parseFloat(editingBalanceInput.replace(',', '.'));
     if (isNaN(num)) return;
 
     await updateAccountBalance(accId, num);
@@ -228,13 +228,23 @@ export default function AccountsPage() {
                               inputMode="decimal"
                               value={editingBalanceInput}
                               onChange={(e) => {
-                                const val = e.target.value.replace(/,/g, '.');
-                                if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+                                const val = e.target.value;
+                                if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
                                   setEditingBalanceInput(val);
                                 }
                               }}
                               className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border rounded-xl font-bold text-slate-900 dark:text-white text-base"
                             />
+                            <button
+                              onClick={() => {
+                                if (!editingBalanceInput.includes('.') && !editingBalanceInput.includes(',')) {
+                                  setEditingBalanceInput(editingBalanceInput ? editingBalanceInput + '.' : '0.');
+                                }
+                              }}
+                              className="w-7 h-7 flex shrink-0 items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 font-bold"
+                            >
+                              .
+                            </button>
                             <button
                               onClick={() => handleSaveAccountBalance(acc.id)}
                               className="px-3 py-2 bg-indigo-600 text-white font-semibold rounded-xl text-xs flex items-center space-x-1 shrink-0"
@@ -297,13 +307,23 @@ export default function AccountsPage() {
                     inputMode="decimal"
                     value={allowanceInput}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/,/g, '.');
-                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      const val = e.target.value;
+                      if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
                         setAllowanceInput(val);
                       }
                     }}
                     className="w-28 px-3 py-1 bg-white dark:bg-slate-900 border rounded-lg font-bold text-slate-900 dark:text-white"
                   />
+                  <button
+                    onClick={() => {
+                      if (!allowanceInput.includes('.') && !allowanceInput.includes(',')) {
+                        setAllowanceInput(allowanceInput ? allowanceInput + '.' : '0.');
+                      }
+                    }}
+                    className="w-7 h-7 flex shrink-0 items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 font-bold"
+                  >
+                    .
+                  </button>
                   <button
                     onClick={handleSaveAllowance}
                     className="p-2 bg-indigo-600 text-white rounded-lg"

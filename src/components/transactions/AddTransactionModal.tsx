@@ -94,7 +94,7 @@ export default function AddTransactionModal({
   if (!isOpen) return null;
 
   // Calculate EUR amount automatically
-  const numAmount = parseFloat(amount) || 0;
+  const numAmount = parseFloat(amount.replace(',', '.')) || 0;
   const eurAmount = currency === 'INR' ? numAmount / eurToInrRate : numAmount;
 
   const handleReceiptParsed = (result: OCRResult) => {
@@ -251,16 +251,29 @@ export default function AddTransactionModal({
                     placeholder="0.00"
                     value={amount}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/,/g, '.');
-                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      const val = e.target.value;
+                      if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
                         setAmount(val);
                       }
                     }}
-                    className="w-full pl-4 pr-12 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-2xl font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full pl-4 pr-24 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-2xl font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
-                    {currency === 'EUR' ? '€' : '₹'}
-                  </span>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!amount.includes('.') && !amount.includes(',')) {
+                          setAmount(amount ? amount + '.' : '0.');
+                        }
+                      }}
+                      className="w-7 h-7 flex items-center justify-center bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 font-bold touch-target"
+                    >
+                      .
+                    </button>
+                    <span className="font-bold text-slate-400 w-4 text-center">
+                      {currency === 'EUR' ? '€' : '₹'}
+                    </span>
+                  </div>
                 </div>
 
                 <button
