@@ -224,10 +224,15 @@ export default function AccountsPage() {
                           </label>
                           <div className="flex items-center space-x-2">
                             <input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={editingBalanceInput}
-                              onChange={(e) => setEditingBalanceInput(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/,/g, '.');
+                                if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+                                  setEditingBalanceInput(val);
+                                }
+                              }}
                               className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-950 border rounded-xl font-bold text-slate-900 dark:text-white text-base"
                             />
                             <button
@@ -288,9 +293,15 @@ export default function AccountsPage() {
                 <div className="flex items-center space-x-2 mt-1">
                   <span className="text-lg font-bold text-slate-900 dark:text-white">€</span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={allowanceInput}
-                    onChange={(e) => setAllowanceInput(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/,/g, '.');
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                        setAllowanceInput(val);
+                      }
+                    }}
                     className="w-28 px-3 py-1 bg-white dark:bg-slate-900 border rounded-lg font-bold text-slate-900 dark:text-white"
                   />
                   <button
