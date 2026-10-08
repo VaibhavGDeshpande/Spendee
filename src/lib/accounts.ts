@@ -94,7 +94,38 @@ export async function deleteAccount(accountId: string): Promise<{ success: boole
 }
 
 export async function updateAccountBalance(accountId: string, newBalance: number): Promise<boolean> {
-  return updateSupabaseAccountBalance(accountId, newBalance);
+  const accounts = await fetchSupabaseAccounts() || [];
+  const target = accounts.find((a) => a.id === accountId);
+  if (!target) return false;
+
+  const diff = newBalance - target.balance;
+  if (diff === 0) return true; // No change needed
+
+  let txId = '';
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    txId = crypto.randomUUID();
+  } else {
+    txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  // Insert a balance adjustment transaction so the trigger calculates it correctly
+  const success = await insertSupabaseTransaction({
+    account_id: accountId,
+    category_id: null,
+    type: diff > 0 ? 'income' : 'expense',
+    amount: Math.abs(diff),
+    currency: target.currency,
+    amount_in_eur: Math.abs(diff),
+    exchange_rate_used: 1.0,
+    merchant: 'Balance Adjustment',
+    transaction_date: new Date().toISOString().split('T')[0],
+  }, txId);
+
+  return success;
 }
 
 export async function getUserProfile(): Promise<Profile | null> {
