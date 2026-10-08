@@ -114,12 +114,11 @@ export async function createTransaction(
       });
     }
 
-    // Source
+    // Source (inserted first)
     const sourceSuccess = await insertSupabaseTransaction({
       ...params,
       type: 'transfer',
       merchant: params.merchant || `Transfer to ${destAccount.name}`,
-      transfer_transaction_id: destTxId,
     }, txId);
 
     // Dest
@@ -155,8 +154,15 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   const success1 = await deleteSupabaseTransaction(id);
   let success2 = true;
   
+  // If the deleted transaction was the Dest, delete its Source
   if (target.transfer_transaction_id) {
     success2 = await deleteSupabaseTransaction(target.transfer_transaction_id);
+  } else {
+    // If the deleted transaction was the Source, find and delete its Dest
+    const linkedDest = transactions.find((t) => t.transfer_transaction_id === id);
+    if (linkedDest) {
+      success2 = await deleteSupabaseTransaction(linkedDest.id);
+    }
   }
   
   return success1 && success2;
