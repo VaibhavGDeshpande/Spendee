@@ -10,31 +10,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No image provided' }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY; // Fallback to checking the other variable name in case they just replaced the value
 
     if (apiKey) {
-      // 1. Use GPT-4o-mini Vision API if key is present
-      let imageContentUrl = base64Image;
+      // 1. Use Gemini Vision API if key is present
+      let b64Data = '';
+      let mimeType = 'image/jpeg';
 
-      if (!imageContentUrl && file) {
+      if (base64Image) {
+        // e.g. "data:image/png;base64,iVBORw0KGgo..."
+        const parts = base64Image.split(',');
+        b64Data = parts[1];
+        mimeType = parts[0].split(':')[1].split(';')[0];
+      } else if (file) {
         const buffer = await file.arrayBuffer();
-        const b64 = Buffer.from(buffer).toString('base64');
-        const mimeType = file.type || 'image/jpeg';
-        imageContentUrl = `data:${mimeType};base64,${b64}`;
+        b64Data = Buffer.from(buffer).toString('base64');
+        mimeType = file.type || 'image/jpeg';
       }
 
-      const openAiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
+          contents: [
             {
-              role: 'system',
-              content: `You are an expert OCR parser for German receipts (e.g. Aldi, Lidl, Rewe, dm, Edeka, Rossmann).
+              parts: [
+                { text: `You are an expert OCR parser for German receipts (e.g. Aldi, Lidl, Rewe, dm, Edeka, Rossmann).
 Extract receipt metadata into valid JSON with keys:
 - merchant (string or null)
 - transaction_date (YYYY-MM-DD string or null)
@@ -43,27 +46,31 @@ Extract receipt metadata into valid JSON with keys:
 - line_items: array of objects { item_name, unit_price, quantity, total_price }
 
 Parse German decimal commas (e.g. 3,49 -> 3.49). Look for keywords like "SUMME", "GESAMT", "MwSt".
-Return ONLY raw valid JSON with no markdown formatting.`,
-            },
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: 'Parse this German receipt photo.' },
-                { type: 'image_url', image_url: { url: imageContentUrl } },
-              ],
-            },
+Return ONLY raw valid JSON with no markdown formatting.` },
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: b64Data
+                  }
+                }
+              ]
+            }
           ],
-          temperature: 0.1,
+          generationConfig: {
+            temperature: 0.1
+          }
         }),
       });
 
-      if (openAiRes.ok) {
-        const aiData = await openAiRes.json();
-        const rawContent = aiData?.choices?.[0]?.message?.content || '{}';
+      if (geminiRes.ok) {
+        const aiData = await geminiRes.json();
+        const rawContent = aiData?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
         const cleanJsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsedObj = JSON.parse(cleanJsonStr);
 
-        return NextResponse.json({ success: true, ocr: parsedObj, provider: 'gpt-4o-mini' });
+        return NextResponse.json({ success: true, ocr: parsedObj, provider: 'gemini-1.5-flash' });
+      } else {
+        console.error('Gemini API Error:', await geminiRes.text());
       }
     }
 

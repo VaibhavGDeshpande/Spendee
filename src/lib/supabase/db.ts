@@ -144,7 +144,32 @@ export async function fetchSupabaseProfile(): Promise<Profile | null> {
         } as Profile;
     }
 
-    return null;
+    // Profile doesn't exist, create it (fallback if trigger failed)
+    const { error: insertError } = await supabase.from('profiles').insert({
+      id: user.id,
+      email: user.email || '',
+      blocked_allowance_eur: 992.00,
+    } as any);
+
+    if (insertError) {
+      console.error('[fetchSupabaseProfile] error inserting fallback profile:', insertError);
+      return null;
+    }
+
+    // Create default accounts
+    await supabase.from('accounts').insert([
+      { user_id: user.id, name: 'Forex Account', currency: 'EUR', balance: 0.00, is_system: true, icon: 'credit-card' },
+      { user_id: user.id, name: 'Cash', currency: 'EUR', balance: 0.00, is_system: true, icon: 'banknote' },
+      { user_id: user.id, name: 'Blocked Account', currency: 'EUR', balance: 0.00, is_system: true, icon: 'landmark' }
+    ] as any);
+
+    return {
+      id: user.id,
+      email: user.email || '',
+      blocked_allowance_eur: 992.0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
   } catch {
     return null;
   }
