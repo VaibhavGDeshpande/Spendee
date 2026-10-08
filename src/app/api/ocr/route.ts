@@ -48,8 +48,8 @@ Extract receipt metadata into valid JSON with keys:
 Parse German decimal commas (e.g. 3,49 -> 3.49). Look for keywords like "SUMME", "GESAMT", "MwSt".
 Return ONLY raw valid JSON with no markdown formatting.` },
                 {
-                  inline_data: {
-                    mime_type: mimeType,
+                  inlineData: {
+                    mimeType: mimeType,
                     data: b64Data
                   }
                 }
@@ -70,7 +70,9 @@ Return ONLY raw valid JSON with no markdown formatting.` },
 
         return NextResponse.json({ success: true, ocr: parsedObj, provider: 'gemini-1.5-flash' });
       } else {
-        console.error('Gemini API Error:', await geminiRes.text());
+        const errorText = await geminiRes.text();
+        console.error('Gemini API Error:', errorText);
+        return NextResponse.json({ error: `Gemini API Error: ${errorText}` }, { status: 500 });
       }
     }
 
