@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { updateSession } from '@/lib/supabase/middleware';
 
 export async function proxy(request: NextRequest) {
-  // Allow all routes without login enforcement for local test mode
-  return NextResponse.next();
+  return await updateSession(request);
 }
 
 export const config = {

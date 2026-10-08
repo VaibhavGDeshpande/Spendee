@@ -1,5 +1,6 @@
 import { Category, TransactionWithDetails, CreateTransactionParams } from '@/types';
 import { getLocalDatabase, saveLocalDatabase } from './storage/localStore';
+import { generateUUID } from './sync';
 
 export async function getCategories(): Promise<Category[]> {
   const db = getLocalDatabase();
@@ -80,7 +81,7 @@ export async function createTransaction(
     : null;
 
   const now = new Date().toISOString();
-  const txId = `tx-${Date.now()}`;
+  const txId = generateUUID();
 
   // Handle Transfer logic
   if (params.type === 'transfer') {
@@ -93,7 +94,7 @@ export async function createTransaction(
       return { success: false, error: 'Destination account not found' };
     }
 
-    const destTxId = `tx-dest-${Date.now()}`;
+    const destTxId = generateUUID();
 
     // Source Tx
     const sourceTx: TransactionWithDetails = {

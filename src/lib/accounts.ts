@@ -1,5 +1,6 @@
 import { Account, Profile } from '@/types';
 import { getLocalDatabase, saveLocalDatabase, updateAccountDirectBalance } from './storage/localStore';
+import { generateUUID } from './sync';
 
 export async function getUserAccounts(): Promise<Account[]> {
   const db = getLocalDatabase();
@@ -28,7 +29,7 @@ export async function createAccount(params: CreateAccountParams): Promise<{ succ
 
   const now = new Date().toISOString();
   const newAccount: Account = {
-    id: `acc-custom-${Date.now()}`,
+    id: generateUUID(),
     user_id: db.profile.id,
     name: nameTrimmed,
     currency: (params.currency || 'EUR').toUpperCase(),
@@ -120,8 +121,9 @@ export async function claimMonthlyAllowance(): Promise<{ success: boolean; messa
 
   const allowanceCat = db.categories.find((c) => c.name.includes('Allowance')) || db.categories[0];
 
+  const txId = generateUUID();
   const newTx: any = {
-    id: `tx-allowance-${Date.now()}`,
+    id: txId,
     user_id: db.profile.id,
     account_id: blockedAcc.id,
     account: blockedAcc,
@@ -143,6 +145,22 @@ export async function claimMonthlyAllowance(): Promise<{ success: boolean; messa
   db.transactions.unshift(newTx);
   blockedAcc.balance = parseFloat((blockedAcc.balance + allowanceAmount).toFixed(2));
   saveLocalDatabase(db);
+
+  // Sync to Supabase in background
+  import('./supabase/db').then(({ insertSupabaseTransaction }) => {
+    insertSupabaseTransaction({
+      account_id: blockedAcc.id,
+      category_id: allowanceCat.id,
+      type: 'income',
+      amount: allowanceAmount,
+      currency: 'EUR',
+      amount_in_eur: allowanceAmount,
+      exchange_rate_used: 1.0,
+      merchant: newTx.merchant,
+      transaction_date: newTx.transaction_date,
+      notes: newTx.notes,
+    }, txId).catch(console.error);
+  });
 
   return {
     success: true,

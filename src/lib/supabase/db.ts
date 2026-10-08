@@ -26,7 +26,12 @@ export async function fetchSupabaseAccounts(): Promise<Account[] | null> {
       .eq('user_id', user.id)
       .order('created_at', { ascending: true });
 
-    if (error || !data || data.length === 0) return null;
+    if (error) {
+      console.error('[fetchSupabaseAccounts]', error);
+      return null;
+    }
+    if (!data) return null;
+    if (data.length === 0) return data as Account[];
 
     // Cache locally
     const local = getLocalDatabase();
@@ -56,8 +61,12 @@ export async function insertSupabaseAccount(account: Account): Promise<boolean> 
       icon: account.icon,
     } as any);
 
+    if (error) {
+      console.error('[insertSupabaseAccount] error:', error, '| account id:', account.id);
+    }
     return !error;
-  } catch {
+  } catch (err) {
+    console.error('[insertSupabaseAccount] caught:', err);
     return false;
   }
 }
@@ -75,8 +84,12 @@ export async function deleteSupabaseAccount(accountId: string): Promise<boolean>
       .eq('id', accountId)
       .eq('user_id', user.id);
 
+    if (error) {
+      console.error('[deleteSupabaseAccount] error:', error);
+    }
     return !error;
-  } catch {
+  } catch (err) {
+    console.error('[deleteSupabaseAccount] caught:', err);
     return false;
   }
 }
@@ -136,7 +149,10 @@ export async function insertSupabaseTransaction(params: CreateTransactionParams,
       transfer_account_id: params.transfer_account_id || null,
     } as any);
 
-    if (error) return false;
+    if (error) {
+      console.error('[insertSupabaseTransaction] error:', error, '| tx id:', txId);
+      return false;
+    }
 
     // Insert line items if present
     if (params.line_items && params.line_items.length > 0) {
@@ -152,7 +168,8 @@ export async function insertSupabaseTransaction(params: CreateTransactionParams,
     }
 
     return true;
-  } catch {
+  } catch (err) {
+    console.error('[insertSupabaseTransaction] caught:', err);
     return false;
   }
 }
@@ -170,8 +187,12 @@ export async function deleteSupabaseTransaction(id: string): Promise<boolean> {
       .eq('id', id)
       .eq('user_id', user.id);
 
+    if (error) {
+      console.error('[deleteSupabaseTransaction] error:', error);
+    }
     return !error;
-  } catch {
+  } catch (err) {
+    console.error('[deleteSupabaseTransaction] caught:', err);
     return false;
   }
 }

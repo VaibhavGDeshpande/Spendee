@@ -9,6 +9,7 @@ import AddTransactionModal from '@/components/transactions/AddTransactionModal';
 import { Account, Category, TransactionWithDetails } from '@/types';
 import { getTransactions, getCategories } from '@/lib/transactions';
 import { getUserAccounts } from '@/lib/accounts';
+import { syncFromSupabase } from '@/lib/sync';
 import { Search, Filter } from 'lucide-react';
 
 export default function TransactionsPage() {
@@ -35,6 +36,8 @@ export default function TransactionsPage() {
   }, [selectedAccountId, selectedCategoryId, selectedType, searchQuery]);
 
   const loadFilterData = async () => {
+    // Pull fresh data from Supabase first
+    await syncFromSupabase();
     const [accs, cats] = await Promise.all([getUserAccounts(), getCategories()]);
     setAccounts(accs);
     setCategories(cats);
@@ -43,19 +46,8 @@ export default function TransactionsPage() {
   const fetchFilteredTransactions = async () => {
     setLoading(true);
     
-    // First attempt to get from Supabase
-    let baseData: TransactionWithDetails[] | null = null;
-    try {
-      const { fetchSupabaseTransactions } = await import('@/lib/supabase/db');
-      baseData = await fetchSupabaseTransactions();
-    } catch (e) {
-      console.warn('Supabase fetch failed, falling back to local DB', e);
-    }
-
-    if (!baseData) {
-      // Fallback: Get all from local DB directly
-      baseData = await getTransactions();
-    }
+    // Fetch directly from local store (which was just synced from Supabase)
+    let baseData: TransactionWithDetails[] = await getTransactions();
 
     // Apply filters client-side
     let list = [...baseData];
