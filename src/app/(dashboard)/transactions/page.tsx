@@ -25,6 +25,7 @@ export default function TransactionsPage() {
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
+  const [eurToInrRate, setEurToInrRate] = useState(91.5);
   const [transactionToEdit, setTransactionToEdit] = useState<TransactionWithDetails | undefined>();
 
   useEffect(() => {
@@ -39,6 +40,16 @@ export default function TransactionsPage() {
     const [accs, cats] = await Promise.all([getUserAccounts(), getCategories()]);
     setAccounts(accs);
     setCategories(cats);
+
+    try {
+      const res = await fetch('/api/rates');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.rate) setEurToInrRate(data.rate);
+      }
+    } catch (e) {
+      console.error('Failed to fetch live rate automatically', e);
+    }
   };
 
   const fetchFilteredTransactions = async () => {
@@ -199,6 +210,7 @@ export default function TransactionsPage() {
               <TransactionCard
                 key={tx.id}
                 transaction={tx}
+                eurToInrRate={eurToInrRate}
                 onDeleted={fetchFilteredTransactions}
                 onEdit={(t) => {
                   setTransactionToEdit(t);
@@ -225,6 +237,7 @@ export default function TransactionsPage() {
         }}
         onSuccess={fetchFilteredTransactions}
         transactionToEdit={transactionToEdit}
+        eurToInrRate={eurToInrRate}
       />
     </div>
   );

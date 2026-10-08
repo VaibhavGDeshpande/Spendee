@@ -48,6 +48,17 @@ export default function DashboardPage() {
     setAccounts(accs);
     setAllTransactions(txs);
     setRecentTransactions(txs.slice(0, 10));
+
+    // Fetch live rate automatically
+    try {
+      const res = await fetch('/api/rates');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.rate) setEurToInrRate(data.rate);
+      }
+    } catch (e) {
+      console.error('Failed to fetch live rate automatically', e);
+    }
     if (profile) setAllowance(profile.blocked_allowance_eur);
 
     // Compute current month statistics
