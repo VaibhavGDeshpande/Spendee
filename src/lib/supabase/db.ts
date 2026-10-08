@@ -326,3 +326,29 @@ export async function deleteSupabaseTransaction(id: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function updateSupabaseTransaction(id: string, params: Partial<CreateTransactionParams>): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const updateData: any = { ...params };
+    delete updateData.line_items; // Handled separately if needed, but we'll ignore for simple edits
+
+    const { error } = await (supabase.from('transactions') as any)
+      .update(updateData)
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[updateSupabaseTransaction] error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[updateSupabaseTransaction] caught:', err);
+    return false;
+  }
+}

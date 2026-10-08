@@ -3,15 +3,17 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { TransactionWithDetails } from '@/types';
-import { Trash2, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, ShoppingBag, Camera } from 'lucide-react';
+import { Trash2, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, ShoppingBag, Camera, Edit2 } from 'lucide-react';
 import { deleteTransaction } from '@/lib/transactions';
 
 interface TransactionCardProps {
   transaction: TransactionWithDetails;
   onDeleted: () => void;
+  onEdit?: (tx: TransactionWithDetails) => void;
+  eurToInrRate?: number;
 }
 
-export default function TransactionCard({ transaction, onDeleted }: TransactionCardProps) {
+export default function TransactionCard({ transaction, onDeleted, onEdit, eurToInrRate = 91.5 }: TransactionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showImage, setShowImage] = useState(false);
@@ -99,9 +101,13 @@ export default function TransactionCard({ transaction, onDeleted }: TransactionC
             {transaction.currency === 'EUR' ? '€' : '₹'}
             {transaction.amount.toFixed(2)}
           </p>
-          {transaction.currency !== 'EUR' && (
+          {transaction.currency !== 'EUR' ? (
             <p className="text-[11px] text-slate-400 font-medium">
               ≈ €{transaction.amount_in_eur.toFixed(2)}
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-400 font-medium">
+              ≈ ₹{(transaction.amount * eurToInrRate).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </p>
           )}
         </div>
@@ -162,14 +168,28 @@ export default function TransactionCard({ transaction, onDeleted }: TransactionC
 
           <div className="flex items-center justify-between pt-1">
             <span className="text-[10px] text-slate-400">ID: {transaction.id.slice(0, 8)}</span>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-semibold flex items-center space-x-1 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete</span>
-            </button>
+            <div className="flex space-x-2">
+              {onEdit && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(transaction);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center space-x-1 transition-colors"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+              )}
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-semibold flex items-center space-x-1 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

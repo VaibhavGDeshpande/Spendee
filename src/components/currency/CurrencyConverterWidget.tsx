@@ -30,7 +30,7 @@ export default function CurrencyConverterWidget({ onClose, onRateFetched }: Curr
         if (Date.now() - parsed.timestamp < 3600 * 1000) {
           setRate(parsed.rate);
           setLastUpdated(parsed.last_updated);
-          if (onRateFetched) onRateFetched(1 / parsed.rate);
+          if (onRateFetched) onRateFetched(parsed.rate);
           calculateInr(100, parsed.rate);
           setLoading(false);
           return;
@@ -43,7 +43,7 @@ export default function CurrencyConverterWidget({ onClose, onRateFetched }: Curr
         setRate(data.rate);
         setLastUpdated(data.last_updated);
         setIsStale(!!data.stale);
-        if (onRateFetched) onRateFetched(1 / data.rate);
+        if (onRateFetched) onRateFetched(data.rate);
         calculateInr(parseFloat(eur) || 100, data.rate);
 
         // Cache in localStorage

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ReceiptText, Plus, WalletCards, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Plus, WalletCards, FileSpreadsheet, BarChart3 } from 'lucide-react';
 
 interface BottomNavProps {
   onOpenAddModal: () => void;
@@ -12,11 +12,11 @@ export default function BottomNav({ onOpenAddModal }: BottomNavProps) {
   const pathname = usePathname();
 
   const navItems = [
-    { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { label: 'Transactions', href: '/transactions', icon: ReceiptText },
+    { label: 'Dash', href: '/', icon: LayoutDashboard },
+    { label: 'Txs', href: '/transactions', icon: ReceiptText },
     { label: 'Add', href: '#add', icon: Plus, isAction: true },
-    { label: 'Accounts', href: '/accounts', icon: WalletCards },
-    { label: 'Export', href: '/export', icon: FileSpreadsheet },
+    { label: 'Charts', href: '/analytics', icon: BarChart3 },
+    { label: 'Accs', href: '/accounts', icon: WalletCards },
   ];
 
   return (

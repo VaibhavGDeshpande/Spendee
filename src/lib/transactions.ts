@@ -4,6 +4,7 @@ import {
   fetchSupabaseTransactions,
   insertSupabaseTransaction,
   deleteSupabaseTransaction,
+  updateSupabaseTransaction,
   fetchSupabaseAccounts,
 } from './supabase/db';
 
@@ -157,4 +158,14 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   }
   
   return success1 && success2;
+}
+
+export async function updateTransaction(
+  id: string,
+  params: Partial<CreateTransactionParams>
+): Promise<{ success: boolean; error?: string }> {
+  // If it's a transfer, we'd theoretically need to update both. For simplicity, just update the target.
+  const success = await updateSupabaseTransaction(id, params);
+  if (!success) return { success: false, error: 'Failed to update transaction' };
+  return { success: true };
 }

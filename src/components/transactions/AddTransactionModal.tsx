@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { X, ArrowRightLeft, PlusCircle, Check, Camera } from 'lucide-react';
-import { Account, Category, OCRResult } from '@/types';
-import { createTransaction } from '@/lib/transactions';
+import { Account, Category, OCRResult, TransactionWithDetails } from '@/types';
+import { createTransaction, updateTransaction } from '@/lib/transactions';
 import { getUserAccounts } from '@/lib/accounts';
 import { getCategories } from '@/lib/transactions';
 import ReceiptScannerModal from '../ocr/ReceiptScannerModal';
@@ -13,7 +13,8 @@ interface AddTransactionModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialAccountName?: string;
-  inrToEurRate?: number;
+  eurToInrRate?: number;
+  transactionToEdit?: TransactionWithDetails;
 }
 
 export default function AddTransactionModal({
@@ -21,7 +22,8 @@ export default function AddTransactionModal({
   onClose,
   onSuccess,
   initialAccountName,
-  inrToEurRate = 0.011,
+  eurToInrRate = 91.5,
+  transactionToEdit,
 }: AddTransactionModalProps) {
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -70,13 +72,30 @@ export default function AddTransactionModal({
     if (cats.length > 0) {
       setSelectedCategoryId(cats[0].id);
     }
+
+    if (transactionToEdit) {
+      setType(transactionToEdit.type);
+      setSelectedAccountId(transactionToEdit.account_id);
+      if (transactionToEdit.transfer_account_id) {
+        setSelectedTransferAccountId(transactionToEdit.transfer_account_id);
+      }
+      if (transactionToEdit.category_id) {
+        setSelectedCategoryId(transactionToEdit.category_id);
+      }
+      setAmount(transactionToEdit.amount.toString());
+      setCurrency(transactionToEdit.currency as 'EUR' | 'INR');
+      setMerchant(transactionToEdit.merchant || '');
+      setTransactionDate(transactionToEdit.transaction_date);
+      setNotes(transactionToEdit.notes || '');
+      setImageUrl(transactionToEdit.image_url || null);
+    }
   };
 
   if (!isOpen) return null;
 
   // Calculate EUR amount automatically
   const numAmount = parseFloat(amount) || 0;
-  const eurAmount = currency === 'INR' ? numAmount * inrToEurRate : numAmount;
+  const eurAmount = currency === 'INR' ? numAmount / eurToInrRate : numAmount;
 
   const handleReceiptParsed = (result: OCRResult) => {
     if (result.merchant) setMerchant(result.merchant);
@@ -109,36 +128,42 @@ export default function AddTransactionModal({
     setError(null);
 
     try {
-      const res = await createTransaction({
+      const payload = {
         account_id: selectedAccountId,
         category_id: type === 'transfer' ? null : selectedCategoryId || null,
         type,
         amount: numAmount,
         currency,
         amount_in_eur: parseFloat(eurAmount.toFixed(2)),
-        exchange_rate_used: currency === 'INR' ? inrToEurRate : 1.0,
+        exchange_rate_used: currency === 'INR' ? (1 / eurToInrRate) : 1.0,
         merchant: merchant || (type === 'transfer' ? 'Transfer' : undefined),
         transaction_date: transactionDate,
         notes: notes || undefined,
         image_url: imageUrl || undefined,
         transfer_account_id: type === 'transfer' ? selectedTransferAccountId : undefined,
         line_items: lineItems.length > 0 ? lineItems : undefined,
-      });
+      };
 
-      if (!res.success) {
-        throw new Error(res.error || 'Failed to record transaction');
+      if (transactionToEdit) {
+        const res = await updateTransaction(transactionToEdit.id, payload);
+        if (!res.success) throw new Error(res.error || 'Failed to update transaction');
+      } else {
+        const res = await createTransaction(payload);
+        if (!res.success) throw new Error(res.error || 'Failed to record transaction');
       }
 
       // Reset form & close
-      setAmount('');
-      setMerchant('');
-      setNotes('');
-      setLineItems([]);
-      setImageUrl(null);
+      if (!transactionToEdit) {
+        setAmount('');
+        setMerchant('');
+        setNotes('');
+        setLineItems([]);
+        setImageUrl(null);
+      }
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error creating transaction';
+      const msg = err instanceof Error ? err.message : 'Error processing transaction';
       setError(msg);
     } finally {
       setLoading(false);
@@ -158,7 +183,7 @@ export default function AddTransactionModal({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center space-x-2">
               <PlusCircle className="w-5 h-5 text-indigo-600" />
-              <span>Add Transaction</span>
+              <span>{transactionToEdit ? 'Edit Transaction' : 'Add Transaction'}</span>
             </h2>
 
             <div className="flex items-center space-x-2">
@@ -246,7 +271,7 @@ export default function AddTransactionModal({
 
               {currency === 'INR' && amount && (
                 <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1.5 font-medium">
-                  ≈ €{eurAmount.toFixed(2)} (Rate: 1 EUR = ₹{(1 / inrToEurRate).toFixed(2)})
+                  ≈ €{eurAmount.toFixed(2)} (Rate: 1 EUR = ₹{eurToInrRate.toFixed(2)})
                 </p>
               )}
             </div>
@@ -379,7 +404,7 @@ export default function AddTransactionModal({
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
               ) : (
-                'Save Transaction'
+                transactionToEdit ? 'Save Changes' : 'Save Transaction'
               )}
             </button>
           </form>

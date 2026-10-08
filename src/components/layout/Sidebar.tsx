@@ -11,6 +11,7 @@ import {
   Wallet,
   HardDrive,
   ArrowLeftRight,
+  BarChart3,
 } from 'lucide-react';
 import CurrencyConverterWidget from '../currency/CurrencyConverterWidget';
 
@@ -26,6 +27,7 @@ export default function Sidebar({ onOpenAddModal, showConverter, onToggleConvert
   const navItems = [
     { label: 'Dashboard', href: '/', icon: LayoutDashboard },
     { label: 'Transactions', href: '/transactions', icon: ReceiptText },
+    { label: 'Analytics', href: '/analytics', icon: BarChart3 },
     { label: 'Accounts', href: '/accounts', icon: WalletCards },
     { label: 'Excel Export', href: '/export', icon: FileSpreadsheet },
   ];

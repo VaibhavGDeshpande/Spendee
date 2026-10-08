@@ -11,23 +11,27 @@ import AddAccountModal from '@/components/accounts/AddAccountModal';
 import { Account, TransactionWithDetails } from '@/types';
 import { getUserAccounts } from '@/lib/accounts';
 import { getTransactions } from '@/lib/transactions';
+import { fetchSupabaseProfile } from '@/lib/supabase/db';
 import { getAccountIconComponent } from '@/lib/utils/accountIcons';
-import { ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, PlusCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, PlusCircle, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<TransactionWithDetails[]>([]);
+  const [allTransactions, setAllTransactions] = useState<TransactionWithDetails[]>([]);
   const [monthlyIncome, setMonthlyIncome] = useState<number>(0);
   const [monthlyExpense, setMonthlyExpense] = useState<number>(0);
   const [categoryBreakdown, setCategoryBreakdown] = useState<{ name: string; amount: number; color: string }[]>([]);
+  const [allowance, setAllowance] = useState<number>(992);
   
   const [loading, setLoading] = useState<boolean>(true);
   const [showConverter, setShowConverter] = useState<boolean>(false);
-  const [inrToEurRate, setInrToEurRate] = useState<number>(0.011);
+  const [eurToInrRate, setEurToInrRate] = useState<number>(91.5);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isAddSourceModalOpen, setIsAddSourceModalOpen] = useState<boolean>(false);
   const [quickAddAccount, setQuickAddAccount] = useState<string | undefined>();
+  const [transactionToEdit, setTransactionToEdit] = useState<TransactionWithDetails | undefined>();
 
   useEffect(() => {
     loadDashboardData();
@@ -35,13 +39,16 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     setLoading(true);
-    const [accs, txs] = await Promise.all([
+    const [accs, txs, profile] = await Promise.all([
       getUserAccounts(),
       getTransactions({ limit: 50 }),
+      fetchSupabaseProfile(),
     ]);
 
     setAccounts(accs);
+    setAllTransactions(txs);
     setRecentTransactions(txs.slice(0, 10));
+    if (profile) setAllowance(profile.blocked_allowance_eur);
 
     // Compute current month statistics
     const now = new Date();
@@ -83,7 +90,10 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 md:pb-8">
       {/* Desktop Sidebar */}
       <Sidebar
-        onOpenAddModal={() => setIsAddModalOpen(true)}
+        onOpenAddModal={() => {
+          setTransactionToEdit(undefined);
+          setIsAddModalOpen(true);
+        }}
         showConverter={showConverter}
         onToggleConverter={() => setShowConverter(!showConverter)}
       />
@@ -103,7 +113,7 @@ export default function DashboardPage() {
           <div className="md:hidden animate-in slide-in-from-top-4 duration-200">
             <CurrencyConverterWidget
               onClose={() => setShowConverter(false)}
-              onRateFetched={(invRate) => setInrToEurRate(invRate)}
+              onRateFetched={(rate) => setEurToInrRate(rate)}
             />
           </div>
         )}
@@ -127,6 +137,11 @@ export default function DashboardPage() {
               <h2 className="text-3xl sm:text-5xl font-black tracking-tight">
                 €{totalBalance.toFixed(2)}
               </h2>
+              {eurToInrRate > 0 && (
+                <p className="text-sm font-medium text-indigo-300 mt-1">
+                  ≈ ₹{(totalBalance * eurToInrRate).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+              )}
             </div>
 
             {/* Quick Monthly Summary */}
@@ -193,6 +208,46 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-400 italic">No expenses recorded yet this month</p>
             )}
           </div>
+
+          {/* Blocked Account Monthly Budget Tracker */}
+          <div className="md:col-span-3 p-6 sm:p-8 bg-linear-to-r from-emerald-600 to-teal-700 dark:from-emerald-800 dark:to-teal-900 rounded-3xl text-white shadow-xl shadow-emerald-600/20 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-100 flex items-center space-x-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Blocked Account Monthly Budget</span>
+              </h3>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2 text-center pt-2">
+              <div>
+                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Monthly Allowance</p>
+                <p className="text-lg sm:text-2xl font-bold">€{allowance.toFixed(2)}</p>
+              </div>
+              <div className="border-x border-emerald-500/30">
+                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Spent</p>
+                <p className="text-lg sm:text-2xl font-bold">€{monthlyExpense.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Left to Spend</p>
+                <p className={`text-lg sm:text-2xl font-bold ${(allowance - monthlyExpense) < 0 ? 'text-red-300' : 'text-white'}`}>
+                  €{(allowance - monthlyExpense).toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <div className="h-2.5 w-full bg-black/20 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all ${
+                    (monthlyExpense / allowance) > 0.9 ? 'bg-red-400' 
+                    : (monthlyExpense / allowance) > 0.75 ? 'bg-yellow-400' 
+                    : 'bg-white'
+                  }`}
+                  style={{ width: `${Math.min((monthlyExpense / (allowance || 1)) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Account Cards Grid */}
@@ -247,6 +302,11 @@ export default function DashboardPage() {
                           {acc.currency === 'EUR' ? '€' : acc.currency === 'INR' ? '₹' : acc.currency === 'USD' ? '$' : '£'}
                           {acc.balance.toFixed(2)}
                         </p>
+                        {acc.currency === 'EUR' && eurToInrRate > 0 && (
+                          <p className="text-[10px] font-medium text-slate-400 mt-0.5">
+                            ≈ ₹{(acc.balance * eurToInrRate).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
@@ -302,6 +362,11 @@ export default function DashboardPage() {
                   key={tx.id}
                   transaction={tx}
                   onDeleted={loadDashboardData}
+                  eurToInrRate={eurToInrRate}
+                  onEdit={(t) => {
+                    setTransactionToEdit(t);
+                    setIsAddModalOpen(true);
+                  }}
                 />
               ))
             )}
@@ -311,15 +376,22 @@ export default function DashboardPage() {
 
       {/* Mobile Bottom Navigation Bar (Hidden on Desktop) */}
       <div className="md:hidden">
-        <BottomNav onOpenAddModal={() => setIsAddModalOpen(true)} />
+        <BottomNav onOpenAddModal={() => {
+          setTransactionToEdit(undefined);
+          setIsAddModalOpen(true);
+        }} />
       </div>
 
       <AddTransactionModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setTransactionToEdit(undefined);
+        }}
         onSuccess={loadDashboardData}
         initialAccountName={quickAddAccount}
-        inrToEurRate={inrToEurRate}
+        eurToInrRate={eurToInrRate}
+        transactionToEdit={transactionToEdit}
       />
 
       <AddAccountModal

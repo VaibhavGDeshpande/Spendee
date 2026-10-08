@@ -25,6 +25,7 @@ export default function TransactionsPage() {
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
+  const [transactionToEdit, setTransactionToEdit] = useState<TransactionWithDetails | undefined>();
 
   useEffect(() => {
     loadFilterData();
@@ -87,7 +88,10 @@ export default function TransactionsPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 md:pb-8">
       <Sidebar
-        onOpenAddModal={() => setIsAddModalOpen(true)}
+        onOpenAddModal={() => {
+          setTransactionToEdit(undefined);
+          setIsAddModalOpen(true);
+        }}
         showConverter={showConverter}
         onToggleConverter={() => setShowConverter(!showConverter)}
       />
@@ -196,6 +200,10 @@ export default function TransactionsPage() {
                 key={tx.id}
                 transaction={tx}
                 onDeleted={fetchFilteredTransactions}
+                onEdit={(t) => {
+                  setTransactionToEdit(t);
+                  setIsAddModalOpen(true);
+                }}
               />
             ))
           )}
@@ -203,13 +211,20 @@ export default function TransactionsPage() {
       </main>
 
       <div className="md:hidden">
-        <BottomNav onOpenAddModal={() => setIsAddModalOpen(true)} />
+        <BottomNav onOpenAddModal={() => {
+          setTransactionToEdit(undefined);
+          setIsAddModalOpen(true);
+        }} />
       </div>
 
       <AddTransactionModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          setTransactionToEdit(undefined);
+        }}
         onSuccess={fetchFilteredTransactions}
+        transactionToEdit={transactionToEdit}
       />
     </div>
   );
