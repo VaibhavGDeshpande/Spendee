@@ -169,7 +169,7 @@ export default function AddTransactionModal({
                   className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-semibold rounded-xl border border-indigo-200 dark:border-indigo-800 flex items-center space-x-1.5"
                 >
                   <Camera className="w-3.5 h-3.5" />
-                  <span>OCR Scan</span>
+                  <span>Attach Photo</span>
                 </button>
               )}
 
