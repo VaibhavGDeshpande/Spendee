@@ -20,6 +20,14 @@ export default function ReceiptScannerModal({
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
+  const [base64Data, setBase64Data] = useState<string | null>(null);
+
+  const fileToBase64 = (f: Blob): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(f);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+  });
 
   if (!isOpen) return null;
 
@@ -28,6 +36,7 @@ export default function ReceiptScannerModal({
     setError(null);
     setPreviewUrl(URL.createObjectURL(file));
 
+    let b64 = '';
     try {
       // 1. Client-side Image Compression to save bandwidth & speed up OCR
       const options = {
@@ -37,6 +46,8 @@ export default function ReceiptScannerModal({
       };
 
       const compressedFile = await imageCompression(file, options);
+      b64 = await fileToBase64(compressedFile);
+      setBase64Data(b64);
 
       // 2. Send compressed file to OCR route
       const formData = new FormData();
@@ -51,13 +62,15 @@ export default function ReceiptScannerModal({
 
       const data = await res.json();
       if (data.success && data.ocr) {
-        setOcrResult(data.ocr);
+        setOcrResult({ ...data.ocr, image_data: b64 });
       } else {
         throw new Error(data.error || 'Failed to parse receipt');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error scanning receipt';
       setError(msg);
+      // Fallback: create empty OCR result so the user can still attach the photo
+      setOcrResult({ merchant: null, transaction_date: null, total_amount: null, currency: 'EUR', line_items: [], image_data: b64 });
     } finally {
       setLoading(false);
     }
@@ -208,7 +221,7 @@ export default function ReceiptScannerModal({
                 className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs shadow-md shadow-indigo-600/20 flex items-center justify-center space-x-1.5 disabled:opacity-50"
               >
                 <Check className="w-4 h-4" />
-                <span>Apply to Transaction</span>
+                <span>{error ? 'Attach Photo Manually' : 'Apply to Transaction'}</span>
               </button>
             </div>
           </div>

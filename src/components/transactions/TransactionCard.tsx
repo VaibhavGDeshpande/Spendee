@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { TransactionWithDetails } from '@/types';
-import { Trash2, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, ShoppingBag } from 'lucide-react';
+import { Trash2, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, ShoppingBag, Camera } from 'lucide-react';
 import { deleteTransaction } from '@/lib/transactions';
 
 interface TransactionCardProps {
@@ -13,6 +14,12 @@ interface TransactionCardProps {
 export default function TransactionCard({ transaction, onDeleted }: TransactionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showImage, setShowImage] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -131,6 +138,28 @@ export default function TransactionCard({ transaction, onDeleted }: TransactionC
             </div>
           )}
 
+          {/* Receipt Photo */}
+          {transaction.image_url && (
+            <div className="space-y-1 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl">
+              <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center space-x-1 mb-2">
+                <Camera className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Receipt Photo</span>
+              </p>
+              <div className="max-h-48 overflow-hidden rounded-lg flex items-center justify-center bg-black/5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={transaction.image_url} 
+                  alt="Receipt" 
+                  className="object-contain max-h-48 w-full rounded-lg cursor-zoom-in"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowImage(true);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-1">
             <span className="text-[10px] text-slate-400">ID: {transaction.id.slice(0, 8)}</span>
             <button
@@ -143,6 +172,35 @@ export default function TransactionCard({ transaction, onDeleted }: TransactionC
             </button>
           </div>
         </div>
+      )}
+
+      {/* Full Screen Image Preview Modal */}
+      {showImage && transaction.image_url && mounted && createPortal(
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowImage(false);
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src={transaction.image_url} 
+            alt="Receipt Fullscreen" 
+            className="max-w-full max-h-[90vh] object-contain rounded-md"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button 
+            className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 p-2 rounded-full text-white backdrop-blur-md"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowImage(false);
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>,
+        document.body
       )}
     </div>
   );

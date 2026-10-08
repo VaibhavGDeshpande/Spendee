@@ -37,6 +37,7 @@ export default function AddTransactionModal({
   const [transactionDate, setTransactionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
   const [lineItems, setLineItems] = useState<any[]>([]);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export default function AddTransactionModal({
     if (result.total_amount) setAmount(result.total_amount.toString());
     if (result.transaction_date) setTransactionDate(result.transaction_date);
     if (result.line_items) setLineItems(result.line_items);
+    if (result.image_data) setImageUrl(result.image_data);
 
     // Auto-select Groceries if German supermarket
     const groceriesCat = categories.find((c) => c.name.toLowerCase().includes('groceries'));
@@ -118,6 +120,7 @@ export default function AddTransactionModal({
         merchant: merchant || (type === 'transfer' ? 'Transfer' : undefined),
         transaction_date: transactionDate,
         notes: notes || undefined,
+        image_url: imageUrl || undefined,
         transfer_account_id: type === 'transfer' ? selectedTransferAccountId : undefined,
         line_items: lineItems.length > 0 ? lineItems : undefined,
       });
@@ -131,6 +134,7 @@ export default function AddTransactionModal({
       setMerchant('');
       setNotes('');
       setLineItems([]);
+      setImageUrl(null);
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -356,6 +360,13 @@ export default function AddTransactionModal({
             {lineItems.length > 0 && (
               <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl text-xs text-indigo-700 dark:text-indigo-300 font-medium">
                 ✓ {lineItems.length} receipt line items attached to transaction
+              </div>
+            )}
+            
+            {/* Image attachment indicator */}
+            {imageUrl && lineItems.length === 0 && (
+              <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-medium">
+                ✓ Receipt photo attached manually
               </div>
             )}
 

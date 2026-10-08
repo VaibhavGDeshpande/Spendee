@@ -48,6 +48,7 @@ export interface OCRResult {
   line_items: ScannedLineItem[];
   raw_text?: string;
   confidence?: number;
+  image_data?: string;
 }
 
 export interface ExchangeRateResponse {
