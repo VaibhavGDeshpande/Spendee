@@ -4,86 +4,81 @@ import { createClient } from '@/lib/supabase/server';
 export const revalidate = 3600; // Cache route for 1 hour
 
 export async function GET() {
-  const supabase = await createClient();
-  const ONE_HOUR_MS = 60 * 60 * 1000;
-
   try {
-    // 1. Check Supabase exchange_rates table for recent cache
-    const { data: cached } = await (supabase.from('exchange_rates') as any)
-      .select('*')
+    const supabase = await createClient();
+    const oneHourMs = 60 * 60 * 1000;
+    const targets = ['INR', 'USD'] as const;
+    type CachedRate = { target_currency: string; rate: number | string; fetched_at: string };
+    const { data: cachedRows } = await (supabase.from('exchange_rates') as any)
+      .select('target_currency, rate, fetched_at')
       .eq('base_currency', 'EUR')
-      .eq('target_currency', 'INR')
-      .single();
-
-    if (cached) {
-      const fetchedTime = new Date(cached.fetched_at).getTime();
-      const isFresh = Date.now() - fetchedTime < ONE_HOUR_MS;
-
-      if (isFresh) {
-        return NextResponse.json({
-          rate: Number(cached.rate),
-          base: 'EUR',
-          target: 'INR',
-          last_updated: cached.fetched_at,
-          from_cache: true,
-        });
-      }
-    }
-
-    // 2. Fetch fresh rate from Frankfurter API
-    const response = await fetch('https://api.frankfurter.app/latest?from=EUR&to=INR', {
-      next: { revalidate: 3600 },
+      .in('target_currency', [...targets]);
+    const cachedByCurrency = new Map<string, CachedRate>(
+      (cachedRows ?? []).map((row: CachedRate) => [row.target_currency, row]),
+    );
+    const needsRefresh = targets.filter((target) => {
+      const cached = cachedByCurrency.get(target);
+      return !cached || Date.now() - new Date(cached.fetched_at).getTime() >= oneHourMs;
     });
+    const fetchedRates: Record<string, number> = {};
 
-    if (response.ok) {
-      const data = await response.json();
-      const freshRate = data?.rates?.INR;
-
-      if (freshRate) {
-        const nowIso = new Date().toISOString();
-
-        // Upsert into Supabase exchange_rates cache table
-        await (supabase.from('exchange_rates') as any).upsert({
-          base_currency: 'EUR',
-          target_currency: 'INR',
-          rate: freshRate,
-          fetched_at: nowIso,
+    if (needsRefresh.length > 0) {
+      try {
+        const url = `https://api.frankfurter.app/latest?from=EUR&to=${needsRefresh.join(',')}`;
+        const response = await fetch(url, {
+          next: { revalidate: 3600 },
+          signal: AbortSignal.timeout(5000),
         });
-
-        return NextResponse.json({
-          rate: freshRate,
-          base: 'EUR',
-          target: 'INR',
-          last_updated: nowIso,
-          from_cache: false,
-        });
+        if (response.ok) {
+          const data = await response.json();
+          Object.assign(fetchedRates, data?.rates ?? {});
+          const fetchedAt = new Date().toISOString();
+          const rows = needsRefresh.flatMap((target) => {
+            const rate = Number(fetchedRates[target]);
+            return Number.isFinite(rate) && rate > 0
+              ? [{ base_currency: 'EUR', target_currency: target, rate, fetched_at: fetchedAt }]
+              : [];
+          });
+          if (rows.length > 0) {
+            await (supabase.from('exchange_rates') as any).upsert(rows);
+          }
+          for (const row of rows) {
+            cachedByCurrency.set(row.target_currency, row);
+          }
+        }
+      } catch (error) {
+        console.warn('Frankfurter rate refresh failed; using cached rates:', error);
       }
     }
 
-    // 3. Graceful Fallback to stale DB cache if external API failed
-    if (cached) {
-      return NextResponse.json({
-        rate: Number(cached.rate),
-        base: 'EUR',
-        target: 'INR',
-        last_updated: cached.fetched_at,
-        from_cache: true,
-        stale: true,
-      });
-    }
+    const rates = Object.fromEntries(targets.map((target) => {
+      const freshRate = Number(fetchedRates[target]);
+      const cached = cachedByCurrency.get(target);
+      const hasFreshRate = Number.isFinite(freshRate) && freshRate > 0;
+      const fallbackRate = target === 'INR' ? 91.5 : 1.12;
+      return [target, {
+        rate: hasFreshRate ? freshRate : cached ? Number(cached.rate) : fallbackRate,
+        last_updated: hasFreshRate ? new Date().toISOString() : cached?.fetched_at ?? new Date().toISOString(),
+        from_cache: !hasFreshRate,
+        stale: !hasFreshRate && Boolean(cached),
+        fallback: !hasFreshRate && !cached,
+      }];
+    }));
 
-    // Default fallback rate (~91.5 INR = 1 EUR)
     return NextResponse.json({
-      rate: 91.5,
+      rate: rates.INR.rate,
       base: 'EUR',
       target: 'INR',
-      last_updated: new Date().toISOString(),
-      from_cache: true,
-      fallback: true,
+      last_updated: rates.INR.last_updated,
+      from_cache: rates.INR.from_cache,
+      stale: rates.INR.stale,
+      fallback: rates.INR.fallback,
+      eur_usd: rates.USD.rate,
+      eur_usd_last_updated: rates.USD.last_updated,
+      eur_usd_from_cache: rates.USD.from_cache,
     });
   } catch (error) {
     console.error('Error fetching exchange rates:', error);
-
     return NextResponse.json({
       rate: 91.5,
       base: 'EUR',
@@ -91,6 +86,9 @@ export async function GET() {
       last_updated: new Date().toISOString(),
       from_cache: true,
       fallback: true,
+      eur_usd: 1.12,
+      eur_usd_from_cache: true,
+      eur_usd_fallback: true,
     });
   }
 }

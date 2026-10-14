@@ -22,6 +22,7 @@ export default function TransactionsPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedType, setSelectedType] = useState<'expense' | 'income' | 'transfer' | ''>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
@@ -33,7 +34,10 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    fetchFilteredTransactions();
+    const timeoutId = window.setTimeout(() => {
+      void fetchFilteredTransactions();
+    }, searchQuery ? 250 : 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selectedAccountId, selectedCategoryId, selectedType, searchQuery]);
 
   const loadFilterData = async () => {
@@ -96,6 +100,8 @@ export default function TransactionsPage() {
     setLoading(false);
   };
 
+  const activeFilterCount = [selectedAccountId, selectedCategoryId, selectedType].filter(Boolean).length;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 md:pb-8">
       <Sidebar
@@ -121,70 +127,96 @@ export default function TransactionsPage() {
           </p>
         </div>
 
-        {/* Filter Controls Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Search Bar */}
-          <div className="relative sm:col-span-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search merchant, notes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
-            />
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="search"
+                placeholder="Search transactions"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((open) => !open)}
+              aria-expanded={filtersOpen}
+              className="sm:hidden inline-flex items-center justify-center gap-2 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-semibold text-slate-700 dark:text-slate-300 touch-target"
+            >
+              <Filter className="w-4 h-4" />
+              <span>Filters</span>
+              {activeFilterCount > 0 && <span className="text-indigo-600 dark:text-indigo-400">{activeFilterCount}</span>}
+            </button>
           </div>
 
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value as any)}
-            className="py-2.5 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
-          >
-            <option value="">All Types (Expenses, Income, Transfers)</option>
-            <option value="expense">Expenses Only</option>
-            <option value="income">Income Only</option>
-            <option value="transfer">Transfers Only</option>
-          </select>
-
-          <select
-            value={selectedCategoryId}
-            onChange={(e) => setSelectedCategoryId(e.target.value)}
-            className="py-2.5 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Account Filter Chips */}
-        <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => setSelectedAccountId('')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all ${
-              selectedAccountId === ''
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-            }`}
-          >
-            All Accounts
-          </button>
-          {accounts.map((acc) => (
-            <button
-              key={acc.id}
-              onClick={() => setSelectedAccountId(acc.id)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all ${
-                selectedAccountId === acc.id
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-              }`}
+          <div className={`${filtersOpen ? 'grid' : 'hidden'} sm:grid grid-cols-1 sm:grid-cols-2 gap-3`}>
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value as typeof selectedType)}
+              className="min-w-0 py-3 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
             >
-              {acc.name}
-            </button>
-          ))}
+              <option value="">All types</option>
+              <option value="expense">Expenses</option>
+              <option value="income">Income</option>
+              <option value="transfer">Transfers</option>
+            </select>
+
+            <select
+              value={selectedCategoryId}
+              onChange={(e) => setSelectedCategoryId(e.target.value)}
+              className="min-w-0 py-3 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
+            >
+              <option value="">All categories</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+
+            <div className="sm:col-span-2 flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAccountId('')}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold shrink-0 transition-all touch-target ${
+                    selectedAccountId === ''
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
+                  }`}
+                >
+                  All accounts
+                </button>
+                {accounts.map((acc) => (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => setSelectedAccountId(acc.id)}
+                    className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold shrink-0 transition-all touch-target ${
+                      selectedAccountId === acc.id
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
+                    }`}
+                  >
+                    {acc.name}
+                  </button>
+                ))}
+              </div>
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAccountId('');
+                    setSelectedCategoryId('');
+                    setSelectedType('');
+                  }}
+                  className="shrink-0 px-2 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 touch-target"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Summation of Selected State */}

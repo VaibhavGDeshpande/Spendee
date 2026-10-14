@@ -12,6 +12,7 @@ import {
   HardDrive,
   ArrowLeftRight,
   BarChart3,
+  Sparkles,
 } from 'lucide-react';
 import CurrencyConverterWidget from '../currency/CurrencyConverterWidget';
 
@@ -28,6 +29,7 @@ export default function Sidebar({ onOpenAddModal, showConverter, onToggleConvert
     { label: 'Dashboard', href: '/', icon: LayoutDashboard },
     { label: 'Transactions', href: '/transactions', icon: ReceiptText },
     { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+    { label: 'AI Insights', href: '/insights', icon: Sparkles },
     { label: 'Accounts', href: '/accounts', icon: WalletCards },
     { label: 'Excel Export', href: '/export', icon: FileSpreadsheet },
   ];

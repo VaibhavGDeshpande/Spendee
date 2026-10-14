@@ -6,11 +6,23 @@ import {
   deleteSupabaseTransaction,
   updateSupabaseTransaction,
   fetchSupabaseAccounts,
+  insertSupabaseCategory,
 } from './supabase/db';
 
 export async function getCategories(): Promise<Category[]> {
   const cats = await fetchSupabaseCategories();
   return cats || [];
+}
+
+export async function createCategory(
+  name: string,
+  type: 'expense' | 'income',
+  color: string,
+): Promise<{ success: boolean; category?: Category; error?: string }> {
+  const category = await insertSupabaseCategory(name.trim(), type, color);
+  return category
+    ? { success: true, category }
+    : { success: false, error: 'Could not create category. Please try again.' };
 }
 
 export interface TransactionFilter {

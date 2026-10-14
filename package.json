@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@openrouter/sdk": "^1.4.25",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "browser-image-compression": "^2.0.2",

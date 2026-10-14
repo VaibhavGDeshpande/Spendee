@@ -224,6 +224,34 @@ export async function fetchSupabaseCategories(): Promise<Category[]> {
   }
 }
 
+export async function insertSupabaseCategory(
+  name: string,
+  type: 'expense' | 'income',
+  color: string,
+): Promise<Category | null> {
+  if (!isSupabaseConnected()) return null;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({ user_id: user.id, name, type, color, icon: 'tag', is_default: false } as any)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('[insertSupabaseCategory]', error);
+      return null;
+    }
+
+    return data as Category;
+  } catch {
+    return null;
+  }
+}
+
 // ==========================================
 // TRANSACTIONS SUPABASE DB SERVICES
 // ==========================================

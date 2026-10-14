@@ -25,6 +25,8 @@ export default function DashboardPage() {
   const [categoryBreakdown, setCategoryBreakdown] = useState<{ name: string; amount: number; color: string }[]>([]);
   const [allowance, setAllowance] = useState<number>(992);
   const [blockedAccountExpense, setBlockedAccountExpense] = useState<number>(0);
+  const [blockedAccountBalance, setBlockedAccountBalance] = useState<number | null>(null);
+  const [forexEurRate, setForexEurRate] = useState<{ eur_usd: number; last_updated: string } | null>(null);
   
   const [loading, setLoading] = useState<boolean>(true);
   const [showConverter, setShowConverter] = useState<boolean>(false);
@@ -50,17 +52,24 @@ export default function DashboardPage() {
     setAllTransactions(txs);
     setRecentTransactions(txs.slice(0, 10));
 
-    // Fetch live rate automatically
+    // Fetch EUR currency rates together to avoid separate upstream requests.
     try {
       const res = await fetch('/api/rates');
       if (res.ok) {
         const data = await res.json();
         if (data.rate) setEurToInrRate(data.rate);
+        if (data.eur_usd) {
+          setForexEurRate({ eur_usd: data.eur_usd, last_updated: data.eur_usd_last_updated || data.last_updated });
+        }
       }
     } catch (e) {
       console.error('Failed to fetch live rate automatically', e);
     }
     if (profile) setAllowance(profile.blocked_allowance_eur);
+
+    // Find the blocked account's actual balance
+    const blockedAccObj = accs.find(a => a.name === 'Blocked Account' && a.is_system);
+    if (blockedAccObj) setBlockedAccountBalance(blockedAccObj.balance);
 
     // Compute current month statistics
     const now = new Date();
@@ -246,13 +255,20 @@ export default function DashboardPage() {
                 <p className="text-lg sm:text-2xl font-bold">€{allowance.toFixed(2)}</p>
               </div>
               <div className="border-x border-emerald-500/30">
-                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Spent</p>
+                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Spent This Month</p>
                 <p className="text-lg sm:text-2xl font-bold">€{blockedAccountExpense.toFixed(2)}</p>
               </div>
               <div>
                 <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Left to Spend</p>
-                <p className={`text-lg sm:text-2xl font-bold ${(allowance - blockedAccountExpense) < 0 ? 'text-red-300' : 'text-white'}`}>
-                  €{(allowance - blockedAccountExpense).toFixed(2)}
+                {/* Use actual account balance (DB truth) not allowance - expenses */}
+                <p className={`text-lg sm:text-2xl font-bold ${
+                  (blockedAccountBalance !== null ? blockedAccountBalance : allowance - blockedAccountExpense) < 0
+                    ? 'text-red-300' : 'text-white'
+                }`}>
+                  €{(blockedAccountBalance !== null
+                    ? blockedAccountBalance
+                    : allowance - blockedAccountExpense
+                  ).toFixed(2)}
                 </p>
               </div>
             </div>
@@ -268,6 +284,13 @@ export default function DashboardPage() {
                   style={{ width: `${Math.min((blockedAccountExpense / (allowance || 1)) * 100, 100)}%` }}
                 />
               </div>
+              {blockedAccountBalance !== null && Math.abs(blockedAccountBalance - (allowance - blockedAccountExpense)) > 0.01 && (
+                <p className="text-[10px] text-emerald-200/70 mt-1.5">
+                  Balance synced from account · {(allowance - blockedAccountExpense) >= 0
+                    ? `Formula est.: €${(allowance - blockedAccountExpense).toFixed(2)}`
+                    : 'Overspent this month'}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -317,6 +340,12 @@ export default function DashboardPage() {
                           {!acc.is_system && (
                             <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold uppercase">
                               Custom
+                            </span>
+                          )}
+                          {/* Live EUR rate badge for Forex Account */}
+                          {acc.name === 'Forex Account' && forexEurRate && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">
+                              1€ = ${forexEurRate.eur_usd.toFixed(4)}
                             </span>
                           )}
                         </p>

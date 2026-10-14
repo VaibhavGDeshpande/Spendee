@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, ArrowRightLeft, PlusCircle, Check, Camera } from 'lucide-react';
+import { X, ArrowRightLeft, PlusCircle, Check, Camera, Plus } from 'lucide-react';
 import { Account, Category, OCRResult, TransactionWithDetails } from '@/types';
-import { createTransaction, updateTransaction } from '@/lib/transactions';
+import { createCategory, createTransaction, updateTransaction } from '@/lib/transactions';
 import { getUserAccounts } from '@/lib/accounts';
 import { getCategories } from '@/lib/transactions';
 import ReceiptScannerModal from '../ocr/ReceiptScannerModal';
@@ -28,6 +28,10 @@ export default function AddTransactionModal({
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedTransferAccountId, setSelectedTransferAccountId] = useState<string>('');
@@ -107,6 +111,35 @@ export default function AddTransactionModal({
     // Auto-select Groceries if German supermarket
     const groceriesCat = categories.find((c) => c.name.toLowerCase().includes('groceries'));
     if (groceriesCat) setSelectedCategoryId(groceriesCat.id);
+  };
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      setCategoryError('Enter a category name.');
+      return;
+    }
+    if (categories.some((category) => category.name.toLowerCase() === name.toLowerCase())) {
+      setCategoryError('That category already exists.');
+      return;
+    }
+
+    setSavingCategory(true);
+    setCategoryError(null);
+    const result = await createCategory(
+      name,
+      type === 'income' ? 'income' : 'expense',
+      ['#0f766e', '#be123c', '#a16207', '#2563eb', '#4d7c0f'][categories.length % 5],
+    );
+    if (result.success && result.category) {
+      setCategories((current) => [...current, result.category!]);
+      setSelectedCategoryId(result.category.id);
+      setNewCategoryName('');
+      setIsCreatingCategory(false);
+    } else {
+      setCategoryError(result.error || 'Could not create category.');
+    }
+    setSavingCategory(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -346,9 +379,22 @@ export default function AddTransactionModal({
             {/* Category Selector Chips */}
             {type !== 'transfer' && (
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                  Category
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Category
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingCategory((current) => !current);
+                      setCategoryError(null);
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add category
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pr-1">
                   {categories.map((cat) => (
                     <button
@@ -366,6 +412,34 @@ export default function AddTransactionModal({
                     </button>
                   ))}
                 </div>
+                {isCreatingCategory && (
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      autoFocus
+                      maxLength={40}
+                      value={newCategoryName}
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleCreateCategory();
+                        }
+                      }}
+                      placeholder="Category name"
+                      aria-label="New category name"
+                      className="min-w-0 flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateCategory()}
+                      disabled={savingCategory || !newCategoryName.trim()}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl disabled:opacity-50"
+                    >
+                      {savingCategory ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                )}
+                {categoryError && <p className="mt-1.5 text-xs text-rose-600">{categoryError}</p>}
               </div>
             )}
 
