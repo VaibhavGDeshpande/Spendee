@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
@@ -8,112 +8,70 @@ import CurrencyConverterWidget from '@/components/currency/CurrencyConverterWidg
 import TransactionCard from '@/components/transactions/TransactionCard';
 import AddTransactionModal from '@/components/transactions/AddTransactionModal';
 import AddAccountModal from '@/components/accounts/AddAccountModal';
-import { Account, TransactionWithDetails } from '@/types';
-import { getUserAccounts } from '@/lib/accounts';
-import { getTransactions } from '@/lib/transactions';
-import { fetchSupabaseProfile } from '@/lib/supabase/db';
+import { TransactionWithDetails } from '@/types';
 import { getAccountIconComponent } from '@/lib/utils/accountIcons';
 import { ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, PlusCircle, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import { useAppData } from '@/context/AppDataContext';
 
 export default function DashboardPage() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<TransactionWithDetails[]>([]);
-  const [allTransactions, setAllTransactions] = useState<TransactionWithDetails[]>([]);
-  const [monthlyIncome, setMonthlyIncome] = useState<number>(0);
-  const [monthlyExpense, setMonthlyExpense] = useState<number>(0);
-  const [categoryBreakdown, setCategoryBreakdown] = useState<{ name: string; amount: number; color: string }[]>([]);
-  const [allowance, setAllowance] = useState<number>(992);
-  const [blockedAccountExpense, setBlockedAccountExpense] = useState<number>(0);
-  const [blockedAccountBalance, setBlockedAccountBalance] = useState<number | null>(null);
-  const [forexEurRate, setForexEurRate] = useState<{ eur_usd: number; last_updated: string } | null>(null);
-  
-  const [loading, setLoading] = useState<boolean>(true);
+  const {
+    accounts, transactions: allTransactions, profile,
+    eurToInrRate, forexEurRate, loading, refresh,
+  } = useAppData();
+
   const [showConverter, setShowConverter] = useState<boolean>(false);
-  const [eurToInrRate, setEurToInrRate] = useState<number>(91.5);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isAddSourceModalOpen, setIsAddSourceModalOpen] = useState<boolean>(false);
   const [quickAddAccount, setQuickAddAccount] = useState<string | undefined>();
   const [transactionToEdit, setTransactionToEdit] = useState<TransactionWithDetails | undefined>();
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+  const recentTransactions = useMemo(() => allTransactions.slice(0, 10), [allTransactions]);
 
-  const loadDashboardData = async () => {
-    setLoading(true);
-    const [accs, txs, profile] = await Promise.all([
-      getUserAccounts(),
-      getTransactions({ limit: 50 }),
-      fetchSupabaseProfile(),
-    ]);
+  const allowance = profile?.blocked_allowance_eur ?? 992;
 
-    setAccounts(accs);
-    setAllTransactions(txs);
-    setRecentTransactions(txs.slice(0, 10));
+  const blockedAcc = useMemo(
+    () => accounts.find(a => a.name === 'Blocked Account' && a.is_system),
+    [accounts],
+  );
+  const blockedAccountBalance = blockedAcc?.balance ?? null;
 
-    // Fetch EUR currency rates together to avoid separate upstream requests.
-    try {
-      const res = await fetch('/api/rates');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.rate) setEurToInrRate(data.rate);
-        if (data.eur_usd) {
-          setForexEurRate({ eur_usd: data.eur_usd, last_updated: data.eur_usd_last_updated || data.last_updated });
-        }
-      }
-    } catch (e) {
-      console.error('Failed to fetch live rate automatically', e);
-    }
-    if (profile) setAllowance(profile.blocked_allowance_eur);
-
-    // Find the blocked account's actual balance
-    const blockedAccObj = accs.find(a => a.name === 'Blocked Account' && a.is_system);
-    if (blockedAccObj) setBlockedAccountBalance(blockedAccObj.balance);
-
-    // Compute current month statistics
+  const { monthlyIncome, monthlyExpense, blockedAccountExpense } = useMemo(() => {
     const now = new Date();
-    const currentMonthTxs = txs.filter((t) => {
-      const d = new Date(t.transaction_date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-
-    const blockedAcc = accs.find(a => a.name === 'Blocked Account' && a.is_system);
     const blockedAccId = blockedAcc?.id;
-
-    let inc = 0;
-    let exp = 0;
-    let blockedExp = 0;
-    const catMap: Record<string, { amount: number; color: string }> = {};
-
-    currentMonthTxs.forEach((t) => {
+    let inc = 0, exp = 0, blockedExp = 0;
+    allTransactions.forEach((t) => {
+      const d = new Date(t.transaction_date);
+      if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return;
       if (t.type === 'income') {
         inc += t.amount_in_eur;
       } else if (t.type === 'expense') {
         exp += t.amount_in_eur;
-        if (t.account_id === blockedAccId) {
-          blockedExp += t.amount_in_eur;
-        }
-        const catName = t.category?.name || 'Other';
-        const color = t.category?.color || '#6366f1';
-        if (!catMap[catName]) catMap[catName] = { amount: 0, color };
-        catMap[catName].amount += t.amount_in_eur;
+        if (t.account_id === blockedAccId) blockedExp += t.amount_in_eur;
       } else if (t.type === 'transfer' && t.account_id === blockedAccId) {
         blockedExp += t.amount_in_eur;
       }
     });
+    return { monthlyIncome: inc, monthlyExpense: exp, blockedAccountExpense: blockedExp };
+  }, [allTransactions, blockedAcc]);
 
-    setMonthlyIncome(inc);
-    setMonthlyExpense(exp);
-    setBlockedAccountExpense(blockedExp);
-
-    const sortedCats = Object.entries(catMap)
+  const { categoryBreakdown, totalExpense } = useMemo(() => {
+    const catMap: Record<string, { amount: number; color: string }> = {};
+    let allTimeExp = 0;
+    allTransactions.forEach((t) => {
+      if (t.type === 'expense') {
+        allTimeExp += t.amount_in_eur;
+        const catName = t.category?.name || 'Other';
+        const color = t.category?.color || '#6366f1';
+        if (!catMap[catName]) catMap[catName] = { amount: 0, color };
+        catMap[catName].amount += t.amount_in_eur;
+      }
+    });
+    const sorted = Object.entries(catMap)
       .map(([name, data]) => ({ name, amount: data.amount, color: data.color }))
       .sort((a, b) => b.amount - a.amount);
-
-    setCategoryBreakdown(sortedCats);
-    setLoading(false);
-  };
+    return { categoryBreakdown: sorted, totalExpense: allTimeExp };
+  }, [allTransactions]);
 
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
 
@@ -144,7 +102,6 @@ export default function DashboardPage() {
           <div className="md:hidden animate-in slide-in-from-top-4 duration-200">
             <CurrencyConverterWidget
               onClose={() => setShowConverter(false)}
-              onRateFetched={(rate) => setEurToInrRate(rate)}
             />
           </div>
         )}
@@ -203,7 +160,7 @@ export default function DashboardPage() {
           <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl space-y-4 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Monthly Spending Breakdown
+                Spending by Category
               </h3>
             </div>
 
@@ -211,7 +168,7 @@ export default function DashboardPage() {
               <>
                 <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full flex overflow-hidden">
                   {categoryBreakdown.map((cat) => {
-                    const pct = (cat.amount / (monthlyExpense || 1)) * 100;
+                    const pct = (cat.amount / (totalExpense || 1)) * 100;
                     return (
                       <div
                         key={cat.name}
@@ -236,7 +193,7 @@ export default function DashboardPage() {
                 </div>
               </>
             ) : (
-              <p className="text-xs text-slate-400 italic">No expenses recorded yet this month</p>
+              <p className="text-xs text-slate-400 italic">No expenses recorded yet</p>
             )}
           </div>
 
@@ -412,7 +369,7 @@ export default function DashboardPage() {
                 <TransactionCard
                   key={tx.id}
                   transaction={tx}
-                  onDeleted={loadDashboardData}
+                  onDeleted={refresh}
                   eurToInrRate={eurToInrRate}
                   onEdit={(t) => {
                     setTransactionToEdit(t);
@@ -439,7 +396,7 @@ export default function DashboardPage() {
           setIsAddModalOpen(false);
           setTransactionToEdit(undefined);
         }}
-        onSuccess={loadDashboardData}
+        onSuccess={refresh}
         initialAccountName={quickAddAccount}
         eurToInrRate={eurToInrRate}
         transactionToEdit={transactionToEdit}
@@ -448,7 +405,7 @@ export default function DashboardPage() {
       <AddAccountModal
         isOpen={isAddSourceModalOpen}
         onClose={() => setIsAddSourceModalOpen(false)}
-        onSuccess={loadDashboardData}
+        onSuccess={refresh}
       />
     </div>
   );

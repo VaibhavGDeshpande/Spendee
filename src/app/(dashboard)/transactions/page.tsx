@@ -1,70 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import TransactionCard from '@/components/transactions/TransactionCard';
 import AddTransactionModal from '@/components/transactions/AddTransactionModal';
-import { Account, Category, TransactionWithDetails } from '@/types';
-import { getTransactions, getCategories } from '@/lib/transactions';
-import { getUserAccounts } from '@/lib/accounts';
+import { TransactionWithDetails } from '@/types';
 import { Search, Filter } from 'lucide-react';
+import { useAppData } from '@/context/AppDataContext';
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { accounts, categories, transactions: allTransactions, loading, eurToInrRate, refresh } = useAppData();
 
   // Filters
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedType, setSelectedType] = useState<'expense' | 'income' | 'transfer' | ''>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
-  const [eurToInrRate, setEurToInrRate] = useState(91.5);
   const [transactionToEdit, setTransactionToEdit] = useState<TransactionWithDetails | undefined>();
 
   useEffect(() => {
-    loadFilterData();
-  }, []);
-
-  useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void fetchFilteredTransactions();
+      setAppliedSearchQuery(searchQuery);
     }, searchQuery ? 250 : 0);
     return () => window.clearTimeout(timeoutId);
-  }, [selectedAccountId, selectedCategoryId, selectedType, searchQuery]);
+  }, [searchQuery]);
 
-  const loadFilterData = async () => {
-    const [accs, cats] = await Promise.all([getUserAccounts(), getCategories()]);
-    setAccounts(accs);
-    setCategories(cats);
-
-    try {
-      const res = await fetch('/api/rates');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.rate) setEurToInrRate(data.rate);
-      }
-    } catch (e) {
-      console.error('Failed to fetch live rate automatically', e);
-    }
-  };
-
-  const fetchFilteredTransactions = async () => {
-    setLoading(true);
-    
-    // Fetch directly from local store (which was just synced from Supabase)
-    let baseData: TransactionWithDetails[] = await getTransactions();
-
-    // Apply filters client-side
-    let list = [...baseData];
-
+  const transactions = useMemo(() => {
+    let list = [...allTransactions];
     if (selectedAccountId) {
       list = list.filter(
         (t) => t.account_id === selectedAccountId || t.transfer_account_id === selectedAccountId
@@ -79,8 +48,8 @@ export default function TransactionsPage() {
       list = list.filter((t) => t.type === selectedType);
     }
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (appliedSearchQuery) {
+      const q = appliedSearchQuery.toLowerCase();
       list = list.filter(
         (t) =>
           t.merchant?.toLowerCase().includes(q) ||
@@ -88,17 +57,14 @@ export default function TransactionsPage() {
           t.category?.name?.toLowerCase().includes(q)
       );
     }
-    
-    // Sort transactions
     list.sort(
       (a, b) =>
         new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime() ||
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
-    setTransactions(list);
-    setLoading(false);
-  };
+    return list;
+  }, [allTransactions, appliedSearchQuery, selectedAccountId, selectedCategoryId, selectedType]);
 
   const activeFilterCount = [selectedAccountId, selectedCategoryId, selectedType].filter(Boolean).length;
 
@@ -278,7 +244,7 @@ export default function TransactionsPage() {
                 key={tx.id}
                 transaction={tx}
                 eurToInrRate={eurToInrRate}
-                onDeleted={fetchFilteredTransactions}
+                onDeleted={refresh}
                 onEdit={(t) => {
                   setTransactionToEdit(t);
                   setIsAddModalOpen(true);
@@ -302,7 +268,7 @@ export default function TransactionsPage() {
           setIsAddModalOpen(false);
           setTransactionToEdit(undefined);
         }}
-        onSuccess={fetchFilteredTransactions}
+        onSuccess={refresh}
         transactionToEdit={transactionToEdit}
         eurToInrRate={eurToInrRate}
       />

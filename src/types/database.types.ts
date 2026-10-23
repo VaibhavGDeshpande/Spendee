@@ -187,6 +187,53 @@ export interface Database {
           created_at?: string
         }
       }
+      hidden_transactions: {
+        Row: {
+          id: string
+          user_id: string
+          type: 'expense' | 'income'
+          amount_in_eur: number
+          currency: string
+          amount: number
+          exchange_rate_used: number
+          merchant: string | null
+          category: string | null
+          transaction_date: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: 'expense' | 'income'
+          amount_in_eur: number
+          currency?: string
+          amount: number
+          exchange_rate_used?: number
+          merchant?: string | null
+          category?: string | null
+          transaction_date?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: 'expense' | 'income'
+          amount_in_eur?: number
+          currency?: string
+          amount?: number
+          exchange_rate_used?: number
+          merchant?: string | null
+          category?: string | null
+          transaction_date?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       exchange_rates: {
         Row: {
           base_currency: string

@@ -1,35 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import ChartsWidget from '@/components/dashboard/ChartsWidget';
-import { Account, TransactionWithDetails } from '@/types';
-import { getTransactions } from '@/lib/transactions';
-import { getUserAccounts } from '@/lib/accounts';
 import { BarChart3, Filter } from 'lucide-react';
 import AddTransactionModal from '@/components/transactions/AddTransactionModal';
+import { useAppData } from '@/context/AppDataContext';
 
 export default function AnalyticsPage() {
-  const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const { accounts, transactions, loading, refresh } = useAppData();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    setLoading(true);
-    const [txs, accs] = await Promise.all([getTransactions(), getUserAccounts()]);
-    setTransactions(txs);
-    setAccounts(accs);
-    setLoading(false);
-  };
 
   const filteredTransactions = selectedAccountId 
     ? transactions.filter(t => t.account_id === selectedAccountId || t.transfer_account_id === selectedAccountId)
@@ -111,7 +95,7 @@ export default function AnalyticsPage() {
       <AddTransactionModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSuccess={loadData}
+        onSuccess={refresh}
       />
     </div>
   );

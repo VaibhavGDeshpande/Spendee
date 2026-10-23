@@ -6,15 +6,13 @@ import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import AddTransactionModal from '@/components/transactions/AddTransactionModal';
 import AddAccountModal from '@/components/accounts/AddAccountModal';
-import { Account, Profile } from '@/types';
-import { getUserAccounts, getUserProfile, claimMonthlyAllowance, updateProfileAllowance, updateAccountBalance, deleteAccount } from '@/lib/accounts';
+import { claimMonthlyAllowance, updateProfileAllowance, updateAccountBalance, deleteAccount } from '@/lib/accounts';
 import { getAccountIconComponent } from '@/lib/utils/accountIcons';
 import { Landmark, CheckCircle2, AlertCircle, Edit2, Check, X, Plus, Trash2 } from 'lucide-react';
+import { useAppData } from '@/context/AppDataContext';
 
 export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { accounts, profile, loading, eurToInrRate, refresh } = useAppData();
   
   // Allowance editing
   const [allowanceInput, setAllowanceInput] = useState('992');
@@ -30,30 +28,14 @@ export default function AccountsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddSourceModalOpen, setIsAddSourceModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
-  const [eurToInrRate, setEurToInrRate] = useState(91.5);
 
   useEffect(() => {
-    loadAccountsData();
-    fetch('/api/rates')
-      .then(res => res.json())
-      .then(data => {
-        if (data.rate) {
-          setEurToInrRate(data.rate);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
-  const loadAccountsData = async () => {
-    setLoading(true);
-    const [accs, prof] = await Promise.all([getUserAccounts(), getUserProfile()]);
-    setAccounts(accs);
-    setProfile(prof);
-    if (prof) {
-      setAllowanceInput(prof.blocked_allowance_eur.toString());
+    if (profile) {
+      setAllowanceInput(profile.blocked_allowance_eur.toString());
     }
-    setLoading(false);
-  };
+  }, [profile]);
+
+  const loadAccountsData = refresh;
 
   const handleSaveAllowance = async () => {
     const num = parseFloat(allowanceInput.replace(',', '.'));
@@ -394,4 +376,3 @@ export default function AccountsPage() {
     </div>
   );
 }
-

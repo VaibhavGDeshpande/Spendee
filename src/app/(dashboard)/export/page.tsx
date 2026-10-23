@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import AddTransactionModal from '@/components/transactions/AddTransactionModal';
-import { getTransactions } from '@/lib/transactions';
-import { getUserAccounts } from '@/lib/accounts';
 import { FileSpreadsheet, Download, Calendar, Filter, CheckCircle2 } from 'lucide-react';
 import ExcelJS from 'exceljs';
+import { useAppData } from '@/context/AppDataContext';
 
 export default function ExportPage() {
+  const { accounts, transactions, refresh } = useAppData();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedAccount, setSelectedAccount] = useState('');
@@ -20,25 +20,16 @@ export default function ExportPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
 
-  const [accounts, setAccounts] = useState<any[]>([]);
-
-  useEffect(() => {
-    getUserAccounts().then(setAccounts);
-  }, []);
-
   const handleExportExcel = async () => {
     setExporting(true);
     setSuccessMsg(null);
 
     try {
-      const [allTxs, fetchedAccounts] = await Promise.all([
-        getTransactions({
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
-          accountId: selectedAccount || undefined,
-        }),
-        getUserAccounts(),
-      ]);
+      const allTxs = transactions.filter((transaction) =>
+        (!startDate || transaction.transaction_date >= startDate) &&
+        (!endDate || transaction.transaction_date <= endDate) &&
+        (!selectedAccount || transaction.account_id === selectedAccount || transaction.transfer_account_id === selectedAccount)
+      );
 
       // Create Excel Workbook using ExcelJS
       const workbook = new ExcelJS.Workbook();
@@ -93,7 +84,7 @@ export default function ExportPage() {
       });
 
       // 2. PER-ACCOUNT SHEETS
-      for (const acc of fetchedAccounts) {
+      for (const acc of accounts) {
         const accTxs = allTxs.filter((t) => t.account_id === acc.id || t.transfer_account_id === acc.id);
         const sheetAcc = workbook.addWorksheet(acc.name);
 
@@ -315,7 +306,7 @@ export default function ExportPage() {
       <AddTransactionModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSuccess={() => {}}
+        onSuccess={refresh}
       />
     </div>
   );

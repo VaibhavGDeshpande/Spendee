@@ -37,8 +37,9 @@ export async function updateSession(request: NextRequest) {
   // If user is not signed in and trying to access protected paths, redirect to login
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup');
   const isPublicAsset = request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.includes('.');
+  const isPublicApi = request.nextUrl.pathname === '/api/rates';
 
-  if (!user && !isAuthPage && !isPublicAsset && request.nextUrl.pathname !== '/') {
+  if (!user && !isAuthPage && !isPublicAsset && !isPublicApi && request.nextUrl.pathname !== '/') {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

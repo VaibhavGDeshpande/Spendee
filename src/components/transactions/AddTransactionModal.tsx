@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, ArrowRightLeft, PlusCircle, Check, Camera, Plus } from 'lucide-react';
-import { Account, Category, OCRResult, TransactionWithDetails } from '@/types';
+import { OCRResult, TransactionWithDetails } from '@/types';
 import { createCategory, createTransaction, updateTransaction } from '@/lib/transactions';
-import { getUserAccounts } from '@/lib/accounts';
-import { getCategories } from '@/lib/transactions';
+import { useAppData } from '@/context/AppDataContext';
 import ReceiptScannerModal from '../ocr/ReceiptScannerModal';
 
 interface AddTransactionModalProps {
@@ -25,9 +24,8 @@ export default function AddTransactionModal({
   eurToInrRate = 91.5,
   transactionToEdit,
 }: AddTransactionModalProps) {
+  const { accounts, categories, refreshCategories } = useAppData();
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [savingCategory, setSavingCategory] = useState(false);
@@ -48,33 +46,29 @@ export default function AddTransactionModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const initializedForOpen = useRef(false);
 
   useEffect(() => {
-    if (isOpen) {
-      loadInitialData();
+    if (!isOpen) {
+      initializedForOpen.current = false;
+      return;
     }
-  }, [isOpen]);
+    if (initializedForOpen.current || accounts.length === 0) return;
+    initializedForOpen.current = true;
 
-  const loadInitialData = async () => {
-    const [accs, cats] = await Promise.all([getUserAccounts(), getCategories()]);
-    setAccounts(accs);
-    setCategories(cats);
-
-    if (accs.length > 0) {
-      if (initialAccountName) {
-        const target = accs.find((a) => a.name.toLowerCase() === initialAccountName.toLowerCase());
-        setSelectedAccountId(target ? target.id : accs[0].id);
-      } else {
-        setSelectedAccountId(accs[0].id);
-      }
-
-      if (accs.length > 1) {
-        setSelectedTransferAccountId(accs[1].id);
-      }
+    if (initialAccountName) {
+      const target = accounts.find((a) => a.name.toLowerCase() === initialAccountName.toLowerCase());
+      setSelectedAccountId(target ? target.id : accounts[0].id);
+    } else {
+      setSelectedAccountId(accounts[0].id);
     }
 
-    if (cats.length > 0) {
-      setSelectedCategoryId(cats[0].id);
+    if (accounts.length > 1) {
+      setSelectedTransferAccountId(accounts[1].id);
+    }
+
+    if (categories.length > 0) {
+      setSelectedCategoryId(categories[0].id);
     }
 
     if (transactionToEdit) {
@@ -93,7 +87,7 @@ export default function AddTransactionModal({
       setNotes(transactionToEdit.notes || '');
       setImageUrl(transactionToEdit.image_url || null);
     }
-  };
+  }, [isOpen, accounts, categories, initialAccountName, transactionToEdit]);
 
   if (!isOpen) return null;
 
@@ -132,7 +126,7 @@ export default function AddTransactionModal({
       ['#0f766e', '#be123c', '#a16207', '#2563eb', '#4d7c0f'][categories.length % 5],
     );
     if (result.success && result.category) {
-      setCategories((current) => [...current, result.category!]);
+      await refreshCategories();
       setSelectedCategoryId(result.category.id);
       setNewCategoryName('');
       setIsCreatingCategory(false);

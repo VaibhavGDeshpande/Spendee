@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ReceiptText, Plus, WalletCards, FileSpreadsheet, BarChart3, Sparkles } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Plus, WalletCards, Sparkles, Shield } from 'lucide-react';
 
 interface BottomNavProps {
   onOpenAddModal: () => void;
@@ -17,11 +17,12 @@ export default function BottomNav({ onOpenAddModal }: BottomNavProps) {
     { label: 'Add', href: '#add', icon: Plus, isAction: true },
     { label: 'Insights', href: '/insights', icon: Sparkles },
     { label: 'Accounts', href: '/accounts', icon: WalletCards },
+    { label: 'Vault', href: '/vault', icon: Shield },
   ];
 
   return (
     <nav aria-label="Primary mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="max-w-md mx-auto grid grid-cols-5 items-center h-16 px-1">
+      <div className="max-w-md mx-auto grid grid-cols-6 items-center h-16 px-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.href === '/'

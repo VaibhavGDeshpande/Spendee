@@ -1,5 +1,5 @@
 import { createClient } from './client';
-import { Account, Category, Profile, TransactionWithDetails, CreateTransactionParams } from '@/types';
+import { Account, Category, Profile, TransactionWithDetails, CreateTransactionParams, HiddenTransaction } from '@/types';
 export function isSupabaseConnected(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -378,6 +378,126 @@ export async function updateSupabaseTransaction(id: string, params: Partial<Crea
     return true;
   } catch (err) {
     console.error('[updateSupabaseTransaction] caught:', err);
+    return false;
+  }
+}
+
+// ==========================================
+// HIDDEN TRANSACTIONS SUPABASE DB SERVICES
+// ==========================================
+
+export interface CreateHiddenTransactionParams {
+  type: 'expense' | 'income';
+  amount: number;
+  currency: string;
+  amount_in_eur: number;
+  exchange_rate_used?: number;
+  merchant?: string;
+  category?: string;
+  transaction_date: string;
+  notes?: string;
+}
+
+export async function fetchSupabaseHiddenTransactions(): Promise<HiddenTransaction[] | null> {
+  if (!isSupabaseConnected()) return null;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('hidden_transactions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('transaction_date', { ascending: false });
+
+    if (error || !data) return null;
+    return data as HiddenTransaction[];
+  } catch {
+    return null;
+  }
+}
+
+export async function insertSupabaseHiddenTransaction(
+  params: CreateHiddenTransactionParams,
+  txId: string,
+): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await supabase.from('hidden_transactions').insert({
+      id: txId,
+      user_id: user.id,
+      type: params.type,
+      amount: params.amount,
+      currency: params.currency,
+      amount_in_eur: params.amount_in_eur,
+      exchange_rate_used: params.exchange_rate_used || 1.0,
+      merchant: params.merchant || null,
+      category: params.category || null,
+      transaction_date: params.transaction_date,
+      notes: params.notes || null,
+    } as any);
+
+    if (error) {
+      console.error('[insertSupabaseHiddenTransaction] error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[insertSupabaseHiddenTransaction] caught:', err);
+    return false;
+  }
+}
+
+export async function deleteSupabaseHiddenTransaction(id: string): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await supabase
+      .from('hidden_transactions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[deleteSupabaseHiddenTransaction] error:', error);
+    }
+    return !error;
+  } catch (err) {
+    console.error('[deleteSupabaseHiddenTransaction] caught:', err);
+    return false;
+  }
+}
+
+export async function updateSupabaseHiddenTransaction(
+  id: string,
+  params: Partial<CreateHiddenTransactionParams>,
+): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await (supabase.from('hidden_transactions') as any)
+      .update(params)
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('[updateSupabaseHiddenTransaction] error:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[updateSupabaseHiddenTransaction] caught:', err);
     return false;
   }
 }
