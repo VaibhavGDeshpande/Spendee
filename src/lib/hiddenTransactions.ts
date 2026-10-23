@@ -1,4 +1,5 @@
 import { HiddenTransaction } from '@/types';
+import { createId } from './utils/id';
 import {
   fetchSupabaseHiddenTransactions,
   insertSupabaseHiddenTransaction,
@@ -17,16 +18,7 @@ export async function getHiddenTransactions(): Promise<HiddenTransaction[]> {
 export async function createHiddenTransaction(
   params: CreateHiddenTransactionParams,
 ): Promise<{ success: boolean; error?: string }> {
-  let txId = '';
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    txId = crypto.randomUUID();
-  } else {
-    txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
+  const txId = createId();
 
   const success = await insertSupabaseHiddenTransaction(params, txId);
   return success ? { success: true } : { success: false, error: 'Failed to save hidden transaction' };

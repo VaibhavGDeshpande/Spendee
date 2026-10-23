@@ -1,4 +1,5 @@
 import { Category, TransactionWithDetails, CreateTransactionParams } from '@/types';
+import { createId } from './utils/id';
 import {
   fetchSupabaseCategories,
   fetchSupabaseTransactions,
@@ -93,16 +94,7 @@ export async function createTransaction(
     return { success: false, error: 'Account not found' };
   }
 
-  let txId = '';
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    txId = crypto.randomUUID();
-  } else {
-    txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
+  const txId = createId();
 
   // Handle Transfer logic
   if (params.type === 'transfer') {
@@ -115,16 +107,7 @@ export async function createTransaction(
       return { success: false, error: 'Destination account not found' };
     }
 
-    let destTxId = '';
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      destTxId = crypto.randomUUID();
-    } else {
-      destTxId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      });
-    }
+    const destTxId = createId();
 
     // Source (inserted first)
     const sourceSuccess = await insertSupabaseTransaction({

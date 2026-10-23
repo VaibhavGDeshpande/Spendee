@@ -1,4 +1,5 @@
 import { Account, Profile } from '@/types';
+import { createId } from './utils/id';
 import {
   fetchSupabaseAccounts,
   insertSupabaseAccount,
@@ -45,17 +46,7 @@ export async function createAccount(params: CreateAccountParams): Promise<{ succ
     return { success: false, error: 'User profile not found' };
   }
 
-  // Generate UUID in browser natively
-  let newId = '';
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    newId = crypto.randomUUID();
-  } else {
-    newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
+  const newId = createId();
 
   const newAccount: Account = {
     id: newId,
@@ -72,16 +63,7 @@ export async function createAccount(params: CreateAccountParams): Promise<{ succ
   const success = await insertSupabaseAccount(newAccount);
   
   if (success && params.balance && params.balance > 0) {
-    let txId = '';
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      txId = crypto.randomUUID();
-    } else {
-      txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      });
-    }
+    const txId = createId();
 
     const eurRate = params.eurToInrRate || 91.5;
     const isINR = newAccount.currency === 'INR';
@@ -134,16 +116,7 @@ export async function updateAccountBalance(accountId: string, newBalanceNative: 
   const diffNative = newBalanceNative - currentBalanceNative;
   if (Math.abs(diffNative) < 0.01) return true; // No change needed
 
-  let txId = '';
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    txId = crypto.randomUUID();
-  } else {
-    txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
+  const txId = createId();
 
   // Insert a balance adjustment transaction so the trigger calculates it correctly
   const success = await insertSupabaseTransaction({
@@ -205,16 +178,7 @@ export async function claimMonthlyAllowance(): Promise<{ success: boolean; messa
   const categories = await fetchSupabaseCategories();
   const allowanceCat = categories.find((c) => c.name.includes('Allowance')) || categories[0];
 
-  let txId = '';
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    txId = crypto.randomUUID();
-  } else {
-    txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
+  const txId = createId();
 
   const txDateStr = now.toISOString().split('T')[0];
   const merchantStr = `Monthly Allowance - ${now.toLocaleString('default', { month: 'long', year: 'numeric' })}`;
