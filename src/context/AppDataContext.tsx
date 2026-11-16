@@ -34,11 +34,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const fetchAllRequest = useRef<Promise<void> | null>(null);
+  const loadedOnce = useRef(false);
 
   const fetchAll = useCallback(async () => {
     if (fetchAllRequest.current) return fetchAllRequest.current;
 
-    setLoading(true);
+    // Only the first load shows skeletons; later refreshes (after adding or editing) update quietly.
+    if (!loadedOnce.current) setLoading(true);
     const request = (async () => {
       try {
         const [accs, txs, cats, prof] = await Promise.all([
@@ -66,6 +68,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           // rates are optional, ignore errors
         }
       } finally {
+        loadedOnce.current = true;
         setLoading(false);
         setInitialized(true);
         fetchAllRequest.current = null;

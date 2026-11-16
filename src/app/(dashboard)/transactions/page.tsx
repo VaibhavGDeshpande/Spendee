@@ -54,7 +54,9 @@ export default function TransactionsPage() {
         (t) =>
           t.merchant?.toLowerCase().includes(q) ||
           t.notes?.toLowerCase().includes(q) ||
-          t.category?.name?.toLowerCase().includes(q)
+          t.category?.name?.toLowerCase().includes(q) ||
+          // cost search: substring match on either currency's amount, e.g. "12.5"
+          [t.amount, t.amount_in_eur].some((a) => a.toFixed(2).includes(q.replace(/[€₹,\s]/g, '')))
       );
     }
     list.sort(
@@ -65,6 +67,19 @@ export default function TransactionsPage() {
 
     return list;
   }, [allTransactions, appliedSearchQuery, selectedAccountId, selectedCategoryId, selectedType]);
+
+  // transactions are already sorted newest-first, so a Map keeps day order
+  const days = useMemo(() => {
+    const m = new Map<string, { list: TransactionWithDetails[]; spent: number }>();
+    for (const t of transactions) {
+      const key = t.transaction_date.slice(0, 10);
+      const d = m.get(key) ?? { list: [], spent: 0 };
+      d.list.push(t);
+      if (t.type === 'expense') d.spent += t.amount_in_eur;
+      m.set(key, d);
+    }
+    return [...m.entries()];
+  }, [transactions]);
 
   const activeFilterCount = [selectedAccountId, selectedCategoryId, selectedType].filter(Boolean).length;
 
@@ -99,7 +114,7 @@ export default function TransactionsPage() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="search"
-                placeholder="Search transactions"
+                placeholder="Search merchant, category or amount"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 shadow-xs"
@@ -239,17 +254,27 @@ export default function TransactionsPage() {
               </p>
             </div>
           ) : (
-            transactions.map((tx) => (
-              <TransactionCard
-                key={tx.id}
-                transaction={tx}
-                eurToInrRate={eurToInrRate}
-                onDeleted={refresh}
-                onEdit={(t) => {
-                  setTransactionToEdit(t);
-                  setIsAddModalOpen(true);
-                }}
-              />
+            days.map(([date, { list, spent }]) => (
+              <section key={date} className="space-y-2.5 pt-2">
+                <div className="flex items-baseline justify-between px-1">
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                    {new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+                  </h2>
+                  <span className="text-xs font-semibold text-rose-500">Spent €{spent.toFixed(2)}</span>
+                </div>
+                {list.map((tx) => (
+                  <TransactionCard
+                    key={tx.id}
+                    transaction={tx}
+                    eurToInrRate={eurToInrRate}
+                    onDeleted={refresh}
+                    onEdit={(t) => {
+                      setTransactionToEdit(t);
+                      setIsAddModalOpen(true);
+                    }}
+                  />
+                ))}
+              </section>
             ))
           )}
         </div>

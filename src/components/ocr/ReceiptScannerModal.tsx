@@ -4,6 +4,7 @@ import { useState } from 'react';
 import imageCompression from 'browser-image-compression';
 import { Camera, Upload, X, Check, AlertCircle, FileText } from 'lucide-react';
 import { OCRResult } from '@/types';
+import ChatBox from '@/components/chat/ChatBox';
 
 interface ReceiptScannerModalProps {
   isOpen: boolean;
@@ -79,7 +80,7 @@ export default function ReceiptScannerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
+      <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
@@ -163,6 +164,8 @@ export default function ReceiptScannerModal({
                 </div>
               )}
             </div>
+
+            {base64Data && !loading && <ChatBox image={base64Data} />}
 
             <div className="flex space-x-2 pt-2">
               <button

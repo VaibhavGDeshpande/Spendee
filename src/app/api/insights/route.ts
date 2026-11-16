@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { aiConfig } from '@/lib/ai';
 
 interface TransactionSummary {
   merchant: string | null;
@@ -213,6 +214,77 @@ function buildReport(transactions: TransactionSummary[]): InsightsReport {
   };
 }
 
+// Numbers stay computed by buildReport; the model only writes the summary and tips.
+// Returns null on any failure so the rule-based text stays as the fallback.
+async function aiNarrative(report: InsightsReport): Promise<Pick<InsightsReport, 'executive_summary' | 'insights'> | null> {
+  const ai = aiConfig();
+  if (!ai) return null;
+  try {
+    // No temperature: the gateway's default model (openai.gpt-6-luna) is a reasoning model that rejects it.
+    const res = await fetch(`${ai.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ai.apiKey}` },
+      body: JSON.stringify({
+        model: ai.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a concise personal-finance assistant. From the spending report (EUR) the user sends, write an executive_summary of at most 2 sentences and 3-4 specific, actionable insights. Use only numbers present in the data; never invent figures. potential_saving_eur must be a realistic estimate or 0.',
+          },
+          { role: 'user', content: JSON.stringify(report) },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'insights_narrative',
+            strict: true,
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                executive_summary: { type: 'string' },
+                insights: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      type: { type: 'string', enum: ['tip', 'warning', 'achievement'] },
+                      title: { type: 'string' },
+                      description: { type: 'string' },
+                      potential_saving_eur: { type: 'number' },
+                    },
+                    required: ['type', 'title', 'description', 'potential_saving_eur'],
+                  },
+                },
+              },
+              required: ['executive_summary', 'insights'],
+            },
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) {
+      console.error('AI insights error:', res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const out = JSON.parse(data?.choices?.[0]?.message?.content ?? '');
+    if (typeof out.executive_summary !== 'string' || !Array.isArray(out.insights) || !out.insights.length) return null;
+    return {
+      executive_summary: out.executive_summary,
+      insights: out.insights.slice(0, 4).map((i: InsightsReport['insights'][number]) => ({
+        ...i,
+        potential_saving_eur: Math.max(0, Number(i.potential_saving_eur) || 0),
+      })),
+    };
+  } catch (error) {
+    console.error('AI insights failed:', error);
+    return null;
+  }
+}
+
 export async function POST() {
   try {
     const supabase = await createClient();
@@ -265,8 +337,11 @@ export async function POST() {
     }));
 
     const report = buildReport(summaries);
+    const ai = await aiNarrative(report);
+    if (ai) Object.assign(report, ai);
     return NextResponse.json({
       report,
+      ai_generated: !!ai,
       generated_at: new Date().toISOString(),
     });
   } catch (error) {

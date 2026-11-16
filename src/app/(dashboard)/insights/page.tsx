@@ -5,7 +5,7 @@ import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import AddTransactionModal from '@/components/transactions/AddTransactionModal';
-import {
+import ChatBox from '@/components/chat/ChatBox';import {
   TrendingUp, ShoppingCart, Store, Lightbulb,
   AlertTriangle, RefreshCw, ChevronDown, ChevronUp, ShoppingBag,
   BarChart2, Calendar, Euro, ArrowRight,
@@ -71,6 +71,7 @@ export default function InsightsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>('insights');
@@ -90,6 +91,7 @@ export default function InsightsPage() {
       if (data.report) {
         setReport(data.report);
         setGeneratedAt(data.generated_at);
+        setAiGenerated(!!data.ai_generated);
       } else {
         setReport(null);
         setError(data.message || 'No data to analyze yet.');
@@ -238,7 +240,8 @@ export default function InsightsPage() {
             {/* Meta + Generated At */}
             {generatedAt && (
               <p className="text-xs text-slate-400 text-right">
-                Report generated on {new Date(generatedAt).toLocaleString()}
+                {aiGenerated ? 'Summary and tips written by AI' : 'Summary and tips from built-in rules (AI unavailable)'}
+                {'. '}Generated on {new Date(generatedAt).toLocaleString()}
               </p>
             )}
 
@@ -273,6 +276,8 @@ export default function InsightsPage() {
                 </div>
               </div>
             </div>
+
+            <ChatBox />
 
             {/* Quick Highlights */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

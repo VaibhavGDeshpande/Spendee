@@ -6,6 +6,8 @@ import { OCRResult, TransactionWithDetails } from '@/types';
 import { createCategory, createTransaction, updateTransaction } from '@/lib/transactions';
 import { useAppData } from '@/context/AppDataContext';
 import ReceiptScannerModal from '../ocr/ReceiptScannerModal';
+import ChatBox from '../chat/ChatBox';
+import { scanReceiptImage, receiptToNotes } from '@/lib/receiptNotes';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -46,6 +48,8 @@ export default function AddTransactionModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const initializedForOpen = useRef(false);
 
   useEffect(() => {
@@ -95,12 +99,34 @@ export default function AddTransactionModal({
   const numAmount = parseFloat(amount.replace(',', '.')) || 0;
   const eurAmount = currency === 'INR' ? numAmount / eurToInrRate : numAmount;
 
+  // Reads the attached photo with the AI and lists every item and its price in the notes box.
+  const scanReceipt = async (image: string) => {
+    setScanning(true);
+    setScanError(null);
+    try {
+      const ocr = await scanReceiptImage(image);
+      const text = receiptToNotes(ocr);
+      setNotes((prev) => (prev ? `${prev}\n\n` : '') + text);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ocr.transaction_date ?? '')) setTransactionDate(ocr.transaction_date!);
+      if (ocr.total_amount != null) {
+        // Keep an amount the user already typed; only fill an empty box.
+        setAmount((prev) => prev || String(ocr.total_amount));
+        if (ocr.currency === 'EUR' || ocr.currency === 'INR') setCurrency(ocr.currency);
+      }
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Could not scan the receipt');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const handleReceiptParsed = (result: OCRResult) => {
     if (result.merchant) setMerchant(result.merchant);
     if (result.total_amount) setAmount(result.total_amount.toString());
     if (result.transaction_date) setTransactionDate(result.transaction_date);
     if (result.line_items) setLineItems(result.line_items);
     if (result.image_data) setImageUrl(result.image_data);
+    if (result.image_data?.startsWith('data:image/') && !result.line_items?.length) scanReceipt(result.image_data);
 
     // Auto-select Groceries if German supermarket
     const groceriesCat = categories.find((c) => c.name.toLowerCase().includes('groceries'));
@@ -466,6 +492,23 @@ export default function AddTransactionModal({
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="tx-notes" className="text-xs font-semibold text-slate-700 dark:text-slate-300">Notes</label>
+                {scanning && <span className="text-xs text-indigo-600 dark:text-indigo-400">Reading receipt…</span>}
+              </div>
+              <textarea
+                id="tx-notes"
+                rows={notes ? 8 : 3}
+                wrap="off"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Items and prices from the receipt appear here"
+                className="w-full px-3 py-2.5 text-xs font-mono rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+              />
+              {scanError && <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>}
+            </div>
+
             {/* Line items indicator if parsed from OCR */}
             {lineItems.length > 0 && (
               <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl text-xs text-indigo-700 dark:text-indigo-300 font-medium">
@@ -479,6 +522,8 @@ export default function AddTransactionModal({
                 ✓ Receipt photo attached manually
               </div>
             )}
+
+            {imageUrl && <ChatBox image={imageUrl} />}
 
             {/* Submit Button */}
             <button

@@ -99,7 +99,7 @@ export default function DashboardPage() {
       <main className="md:pl-64 max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Mobile Live Converter Card */}
         {showConverter && (
-          <div className="md:hidden animate-in slide-in-from-top-4 duration-200">
+          <div className="md:hidden motion-safe:animate-in motion-safe:slide-in-from-top-4 duration-200">
             <CurrencyConverterWidget
               onClose={() => setShowConverter(false)}
             />
@@ -110,10 +110,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Total Combined Balance Card */}
           <div className="md:col-span-2 p-6 sm:p-8 rounded-3xl bg-linear-to-br from-indigo-600 via-indigo-700 to-indigo-900 text-white shadow-xl shadow-indigo-600/20 space-y-4 relative overflow-hidden flex flex-col justify-between">
-            <div className="absolute -right-6 -bottom-6 w-48 h-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
             
             <div className="flex items-center justify-between">
-              <span className="text-xs sm:text-sm font-semibold text-indigo-200 uppercase tracking-wider">
+              <span className="text-xs sm:text-sm font-semibold text-indigo-200">
                 Total Combined Balance
               </span>
               <span className="text-xs px-3 py-1 rounded-full bg-white/15 text-white font-semibold">
@@ -159,7 +158,7 @@ export default function DashboardPage() {
           {/* Category Spending Breakdown Summary Card */}
           <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl space-y-4 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                 Spending by Category
               </h3>
             </div>
@@ -173,7 +172,7 @@ export default function DashboardPage() {
                       <div
                         key={cat.name}
                         style={{ width: `${pct}%`, backgroundColor: cat.color }}
-                        className="h-full transition-all"
+                        className="h-full"
                         title={`${cat.name}: €${cat.amount.toFixed(2)} (${pct.toFixed(0)}%)`}
                       />
                     );
@@ -200,7 +199,7 @@ export default function DashboardPage() {
           {/* Blocked Account Monthly Budget Tracker */}
           <div className="md:col-span-3 p-6 sm:p-8 bg-linear-to-r from-emerald-600 to-teal-700 dark:from-emerald-800 dark:to-teal-900 rounded-3xl text-white shadow-xl shadow-emerald-600/20 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-100 flex items-center space-x-1.5">
+              <h3 className="text-xs font-semibold text-emerald-100 flex items-center space-x-1.5">
                 <ShieldCheck className="w-4 h-4" />
                 <span>Blocked Account Monthly Budget</span>
               </h3>
@@ -208,15 +207,15 @@ export default function DashboardPage() {
             
             <div className="grid grid-cols-3 gap-2 text-center pt-2">
               <div>
-                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Monthly Allowance</p>
+                <p className="text-xs text-emerald-200 font-medium">Monthly Allowance</p>
                 <p className="text-lg sm:text-2xl font-bold">€{allowance.toFixed(2)}</p>
               </div>
               <div className="border-x border-emerald-500/30">
-                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Spent This Month</p>
+                <p className="text-xs text-emerald-200 font-medium">Spent This Month</p>
                 <p className="text-lg sm:text-2xl font-bold">€{blockedAccountExpense.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-[10px] sm:text-xs text-emerald-200 uppercase font-medium">Left to Spend</p>
+                <p className="text-xs text-emerald-200 font-medium">Left to Spend</p>
                 {/* Use actual account balance (DB truth) not allowance - expenses */}
                 <p className={`text-lg sm:text-2xl font-bold ${
                   (blockedAccountBalance !== null ? blockedAccountBalance : allowance - blockedAccountExpense) < 0
@@ -233,7 +232,7 @@ export default function DashboardPage() {
             <div className="pt-2">
               <div className="h-2.5 w-full bg-black/20 rounded-full overflow-hidden">
                 <div 
-                  className={`h-full transition-all ${
+                  className={`h-full ${
                     (blockedAccountExpense / allowance) > 0.9 ? 'bg-red-400' 
                     : (blockedAccountExpense / allowance) > 0.75 ? 'bg-yellow-400' 
                     : 'bg-white'
@@ -242,8 +241,8 @@ export default function DashboardPage() {
                 />
               </div>
               {blockedAccountBalance !== null && Math.abs(blockedAccountBalance - (allowance - blockedAccountExpense)) > 0.01 && (
-                <p className="text-[10px] text-emerald-200/70 mt-1.5">
-                  Balance synced from account · {(allowance - blockedAccountExpense) >= 0
+                <p className="text-xs text-emerald-200/70 mt-1.5">
+                  Balance synced from account. {(allowance - blockedAccountExpense) >= 0
                     ? `Formula est.: €${(allowance - blockedAccountExpense).toFixed(2)}`
                     : 'Overspent this month'}
                 </p>
@@ -255,7 +254,7 @@ export default function DashboardPage() {
         {/* Account Cards Grid */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               Accounts Overview ({accounts.length})
             </h3>
             <Link href="/accounts" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center">
@@ -280,13 +279,13 @@ export default function DashboardPage() {
                         setQuickAddAccount(acc.name);
                         setIsAddModalOpen(true);
                       }}
-                      className="p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex flex-col justify-between shadow-xs hover:border-indigo-500 transition-all cursor-pointer active:scale-95 group"
+                      className="p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex flex-col justify-between shadow-xs hover:border-indigo-500 transition-colors cursor-pointer active:scale-95 group"
                     >
                       <div className="flex items-center justify-between">
                         <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-105 transition-transform">
                           <Icon className="w-5 h-5 stroke-[2]" />
                         </div>
-                        <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
                           <Plus className="w-3 h-3 mr-0.5" /> Add
                         </span>
                       </div>
@@ -295,13 +294,13 @@ export default function DashboardPage() {
                         <p className="text-xs font-medium text-slate-400 flex items-center space-x-1">
                           <span>{acc.name}</span>
                           {!acc.is_system && (
-                            <span className="text-[9px] px-1 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold uppercase">
+                            <span className="text-[11px] px-1 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold">
                               Custom
                             </span>
                           )}
                           {/* Live EUR rate badge for Forex Account */}
                           {acc.name === 'Forex Account' && forexEurRate && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">
                               1€ = ${forexEurRate.eur_usd.toFixed(4)}
                             </span>
                           )}
@@ -311,7 +310,7 @@ export default function DashboardPage() {
                           {acc.currency === 'INR' ? (acc.balance * eurToInrRate).toFixed(2) : acc.balance.toFixed(2)}
                         </p>
                         {acc.currency === 'EUR' && eurToInrRate > 0 && (
-                          <p className="text-[10px] font-medium text-slate-400 mt-0.5">
+                          <p className="text-xs font-medium text-slate-400 mt-0.5">
                             ≈ ₹{(acc.balance * eurToInrRate).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </p>
                         )}
@@ -323,7 +322,7 @@ export default function DashboardPage() {
                 {/* Add Source Tile */}
                 <div
                   onClick={() => setIsAddSourceModalOpen(true)}
-                  className="p-4 bg-slate-50/70 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-2xl flex flex-col justify-center items-center text-center shadow-xs transition-all cursor-pointer group space-y-2 min-h-28"
+                  className="p-4 bg-slate-50/70 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-2xl flex flex-col justify-center items-center text-center shadow-xs transition-colors cursor-pointer group space-y-2 min-h-28"
                 >
                   <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <PlusCircle className="w-5 h-5" />
@@ -332,7 +331,7 @@ export default function DashboardPage() {
                     <p className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
                       Add Funding Source
                     </p>
-                    <p className="text-[10px] text-slate-400">Wise, N26, Student Loan...</p>
+                    <p className="text-xs text-slate-400">Wise, N26, Student Loan…</p>
                   </div>
                 </div>
               </>
@@ -343,7 +342,7 @@ export default function DashboardPage() {
         {/* 10 Recent Transactions Section */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               Recent Transactions
             </h3>
             <Link href="/transactions" className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center">

@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { TransactionWithDetails } from '@/types';
-import { Trash2, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, ShoppingBag, Camera, Edit2 } from 'lucide-react';
-import { deleteTransaction } from '@/lib/transactions';
+import { Trash2, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, ShoppingBag, Camera, Edit2, X, ScanText } from 'lucide-react';
+import { deleteTransaction, updateTransaction } from '@/lib/transactions';
+import { scanReceiptImage, receiptToNotes } from '@/lib/receiptNotes';
 
 interface TransactionCardProps {
   transaction: TransactionWithDetails;
@@ -33,6 +34,27 @@ export default function TransactionCard({ transaction, onDeleted, onEdit, eurToI
 
     if (success) {
       onDeleted();
+    }
+  };
+
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  // Re-reads the stored receipt photo and saves the item/price list as this transaction's notes.
+  const handleRescan = async () => {
+    if (!transaction.image_url) return;
+    if (transaction.notes && !confirm('Replace the existing notes with the scanned receipt text?')) return;
+    setScanning(true);
+    setScanError(null);
+    try {
+      const text = receiptToNotes(await scanReceiptImage(transaction.image_url));
+      const { success } = await updateTransaction(transaction.id, { notes: text });
+      if (!success) throw new Error('Could not save the notes');
+      onDeleted(); // the parent's refresh: reloads the list so the new notes show
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Could not scan the receipt');
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -113,13 +135,86 @@ export default function TransactionCard({ transaction, onDeleted, onEdit, eurToI
         </div>
       </div>
 
-      {/* Expanded Detail View */}
-      {expanded && (
-        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-2 animate-in fade-in duration-150">
-          {transaction.notes && (
-            <p className="italic bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl">
-              &quot;{transaction.notes}&quot;
+      {/* Detail modal: portal clicks bubble to the card's onClick, so every layer stops propagation */}
+      {expanded && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 sm:p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(false);
+          }}
+        >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Transaction details"
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl text-sm text-slate-600 dark:text-slate-300 space-y-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white break-words">
+                {transaction.merchant || (isTransfer ? 'Account Transfer' : 'Uncategorized Expense')}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {new Date(transaction.transaction_date).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-label="Close details"
+              className="p-1.5 -mr-1.5 text-slate-400 hover:text-slate-600 rounded-lg touch-target focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div>
+            <p className={`text-3xl font-black ${isIncome ? 'text-emerald-600 dark:text-emerald-400' : isTransfer ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-900 dark:text-white'}`}>
+              {isExpense ? '-' : isIncome ? '+' : ''}
+              {transaction.currency === 'EUR' ? '€' : '₹'}
+              {transaction.amount.toFixed(2)}
             </p>
+            {transaction.currency !== 'EUR' && (
+              <p className="text-xs text-slate-400 font-medium">≈ €{transaction.amount_in_eur.toFixed(2)}</p>
+            )}
+          </div>
+
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+            <dt className="text-slate-400">Type</dt>
+            <dd className="font-medium capitalize text-slate-800 dark:text-slate-200">{transaction.type}</dd>
+            <dt className="text-slate-400">Account</dt>
+            <dd className="font-medium text-slate-800 dark:text-slate-200">{transaction.account?.name || 'Account'}</dd>
+            {transaction.category && (
+              <>
+                <dt className="text-slate-400">Category</dt>
+                <dd className="font-medium text-slate-800 dark:text-slate-200">{transaction.category.name}</dd>
+              </>
+            )}
+          </dl>
+
+          {(transaction.notes || (transaction.image_url && !transaction.image_url.startsWith('data:application/pdf'))) && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Notes</p>
+                {transaction.image_url && !transaction.image_url.startsWith('data:application/pdf') && (
+                  <button
+                    type="button"
+                    onClick={handleRescan}
+                    disabled={scanning}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+                  >
+                    <ScanText className="w-3.5 h-3.5" />
+                    {scanning ? 'Scanning…' : 'Rescan receipt'}
+                  </button>
+                )}
+              </div>
+              {transaction.notes && (
+                <pre className="font-mono text-xs bg-slate-50 dark:bg-slate-950 p-3 rounded-xl whitespace-pre overflow-x-auto">{transaction.notes}</pre>
+              )}
+              {scanError && <p className="text-xs text-red-600 dark:text-red-400">{scanError}</p>}
+            </div>
           )}
 
           {transaction.currency === 'INR' && (
@@ -184,6 +279,7 @@ export default function TransactionCard({ transaction, onDeleted, onEdit, eurToI
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    setExpanded(false);
                     onEdit(transaction);
                   }}
                   className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center space-x-1 transition-colors"
@@ -203,6 +299,8 @@ export default function TransactionCard({ transaction, onDeleted, onEdit, eurToI
             </div>
           </div>
         </div>
+        </div>,
+        document.body
       )}
 
       {/* Full Screen Image Preview Modal */}
