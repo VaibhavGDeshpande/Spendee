@@ -111,7 +111,9 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
             </span>
           </p>
           {missing.length > 0 && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">No price for: {missing.join(', ')}</p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+              No price for: {missing.join(', ')}. Use a ticker (e.g. NVD.DE) or ISIN; private companies can&apos;t be priced.
+            </p>
           )}
         </div>
       )}
@@ -125,7 +127,10 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
             <li key={h.id} className="flex items-center justify-between text-xs gap-2">
               <div className="min-w-0">
                 <p className="font-semibold text-slate-900 dark:text-white truncate" title={q?.name}>{h.symbol}</p>
-                <p className="text-slate-400">{h.quantity} × {q ? eur(q.price_eur) : '—'}</p>
+                <p className="text-slate-400">
+                  {h.quantity} × {q ? eur(q.price_eur) : '—'}
+                  {q?.resolved_symbol && q.resolved_symbol !== h.symbol && ` · ${q.resolved_symbol}`}
+                </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <div className="text-right">

@@ -48,6 +48,7 @@ export interface Quote {
   symbol: string;
   price_eur: number;
   name?: string;
+  resolved_symbol?: string;
 }
 
 /** Market value, cost basis and P/L (EUR). Holdings without a quote count toward cost only. */

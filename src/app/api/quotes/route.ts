@@ -9,17 +9,31 @@ const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; Spendee/1.0)' };
 const SYMBOL_RE = /^[A-Z0-9.\-^=]{1,20}$/;
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
 
-async function resolveSymbol(input: string): Promise<string | null> {
-  if (!ISIN_RE.test(input)) return input;
+// Look up an ISIN or company name (e.g. "NVIDIA") and pick a tradeable listing.
+async function searchSymbol(input: string): Promise<string | null> {
   const res = await fetch(
     `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(input)}&quotesCount=10&newsCount=0`,
     { headers: UA, next: { revalidate: 86400 } },
   );
   if (!res.ok) return null;
-  const quotes: { symbol?: string }[] = (await res.json())?.quotes ?? [];
-  const symbols = quotes.map((q) => q.symbol).filter((s): s is string => Boolean(s));
+  type Hit = { symbol?: string; quoteType?: string; shortname?: string; longname?: string };
+  const isIsin = ISIN_RE.test(input);
+  const symbols = ((await res.json())?.quotes ?? [])
+    .filter((q: Hit) => q.symbol && ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType ?? ''))
+    // Name searches are fuzzy ("ANTHROPIC" returns ANT, ANTO…): require the name to match, never misprice.
+    .filter((q: Hit) => isIsin || `${q.shortname ?? ''} ${q.longname ?? ''}`.toUpperCase().includes(input))
+    .map((q: Hit) => q.symbol as string);
   // Prefer a XETRA (EUR) listing, then any other German exchange, then whatever Yahoo ranks first.
-  return symbols.find((s) => s.endsWith('.DE')) ?? symbols.find((s) => /\.(F|SG|MU|BE|DU|HM)$/.test(s)) ?? symbols[0] ?? null;
+  return symbols.find((s: string) => s.endsWith('.DE')) ?? symbols.find((s: string) => /\.(F|SG|MU|BE|DU|HM)$/.test(s)) ?? symbols[0] ?? null;
+}
+
+async function fetchChart(symbol: string) {
+  const res = await fetch(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`,
+    { headers: UA, next: { revalidate: QUOTE_TTL } },
+  );
+  if (!res.ok) return null;
+  return (await res.json())?.chart?.result?.[0]?.meta ?? null;
 }
 
 async function eurPerUnit(currency: string): Promise<number | null> {
@@ -33,14 +47,14 @@ async function eurPerUnit(currency: string): Promise<number | null> {
 }
 
 async function fetchQuote(input: string) {
-  const symbol = await resolveSymbol(input);
-  if (!symbol) return null;
-  const res = await fetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`,
-    { headers: UA, next: { revalidate: QUOTE_TTL } },
-  );
-  if (!res.ok) return null;
-  const meta = (await res.json())?.chart?.result?.[0]?.meta;
+  // Try as a ticker first; fall back to ISIN / name search.
+  let symbol: string | null = ISIN_RE.test(input) ? null : input;
+  let meta = symbol ? await fetchChart(symbol) : null;
+  if (!meta) {
+    symbol = await searchSymbol(input);
+    meta = symbol ? await fetchChart(symbol) : null;
+  }
+  if (!meta || !symbol) return null;
   let price = Number(meta?.regularMarketPrice);
   let currency = String(meta?.currency ?? '');
   if (!(price > 0) || !currency) return null;
