@@ -1,5 +1,5 @@
 import { createClient } from './client';
-import { Account, Category, Profile, TransactionWithDetails, CreateTransactionParams, HiddenTransaction } from '@/types';
+import { Account, Category, Profile, TransactionWithDetails, CreateTransactionParams, HiddenTransaction, Holding } from '@/types';
 export function isSupabaseConnected(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -498,6 +498,95 @@ export async function updateSupabaseHiddenTransaction(
     return true;
   } catch (err) {
     console.error('[updateSupabaseHiddenTransaction] caught:', err);
+    return false;
+  }
+}
+
+// ==========================================
+// HOLDINGS SUPABASE DB SERVICES
+// ==========================================
+
+export interface HoldingParams {
+  account_id: string;
+  symbol: string;
+  quantity: number;
+  avg_buy_price_eur: number;
+}
+
+export async function fetchSupabaseHoldings(): Promise<Holding[] | null> {
+  if (!isSupabaseConnected()) return null;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('holdings')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+
+    if (error || !data) {
+      if (error) console.error('[fetchSupabaseHoldings]', error);
+      return null;
+    }
+    return (data as Holding[]).map((h) => ({
+      ...h,
+      quantity: Number(h.quantity),
+      avg_buy_price_eur: Number(h.avg_buy_price_eur),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+export async function insertSupabaseHolding(params: HoldingParams, id: string): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await supabase.from('holdings').insert({ id, user_id: user.id, ...params } as any);
+    if (error) console.error('[insertSupabaseHolding] error:', error);
+    return !error;
+  } catch (err) {
+    console.error('[insertSupabaseHolding] caught:', err);
+    return false;
+  }
+}
+
+export async function updateSupabaseHolding(id: string, params: Omit<HoldingParams, 'account_id'>): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await (supabase.from('holdings') as any)
+      .update({ ...params, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', user.id);
+    if (error) console.error('[updateSupabaseHolding] error:', error);
+    return !error;
+  } catch (err) {
+    console.error('[updateSupabaseHolding] caught:', err);
+    return false;
+  }
+}
+
+export async function deleteSupabaseHolding(id: string): Promise<boolean> {
+  if (!isSupabaseConnected()) return false;
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error } = await supabase.from('holdings').delete().eq('id', id).eq('user_id', user.id);
+    if (error) console.error('[deleteSupabaseHolding] error:', error);
+    return !error;
+  } catch (err) {
+    console.error('[deleteSupabaseHolding] caught:', err);
     return false;
   }
 }

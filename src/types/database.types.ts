@@ -234,6 +234,34 @@ export interface Database {
           updated_at?: string
         }
       }
+      holdings: {
+        Row: {
+          id: string
+          user_id: string
+          account_id: string
+          symbol: string
+          quantity: number
+          avg_buy_price_eur: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          account_id: string
+          symbol: string
+          quantity: number
+          avg_buy_price_eur: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          symbol?: string
+          quantity?: number
+          avg_buy_price_eur?: number
+          updated_at?: string
+        }
+      }
       exchange_rates: {
         Row: {
           base_currency: string

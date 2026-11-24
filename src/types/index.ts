@@ -7,6 +7,7 @@ export type Transaction = Database['public']['Tables']['transactions']['Row'];
 export type TransactionItem = Database['public']['Tables']['transaction_items']['Row'];
 export type ExchangeRate = Database['public']['Tables']['exchange_rates']['Row'];
 export type HiddenTransaction = Database['public']['Tables']['hidden_transactions']['Row'];
+export type Holding = Database['public']['Tables']['holdings']['Row'];
 
 
 export type TransactionType = 'expense' | 'income' | 'transfer';

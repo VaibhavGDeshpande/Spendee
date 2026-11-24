@@ -8,8 +8,11 @@ import AddTransactionModal from '@/components/transactions/AddTransactionModal';
 import AddAccountModal from '@/components/accounts/AddAccountModal';
 import { claimMonthlyAllowance, updateProfileAllowance, updateAccountBalance, deleteAccount } from '@/lib/accounts';
 import { getAccountIconComponent } from '@/lib/utils/accountIcons';
-import { Landmark, CheckCircle2, AlertCircle, Edit2, Check, X, Plus, Trash2 } from 'lucide-react';
+import { Landmark, CheckCircle2, AlertCircle, Edit2, Check, X, Plus, Trash2, TrendingUp } from 'lucide-react';
 import { useAppData } from '@/context/AppDataContext';
+import HoldingsPanel from '@/components/accounts/HoldingsPanel';
+import { getHoldings } from '@/lib/holdings';
+import { Holding } from '@/types';
 
 export default function AccountsPage() {
   const { accounts, profile, loading, eurToInrRate, refresh } = useAppData();
@@ -28,6 +31,14 @@ export default function AccountsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddSourceModalOpen, setIsAddSourceModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
+
+  // Broker holdings (shown alongside, never mixed into, the cash balance)
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [holdingsOpen, setHoldingsOpen] = useState<Set<string>>(new Set());
+  const loadHoldings = () => getHoldings().then(setHoldings);
+  useEffect(() => {
+    loadHoldings();
+  }, []);
 
   useEffect(() => {
     if (profile) {
@@ -153,6 +164,8 @@ export default function AccountsPage() {
               {accounts.map((acc) => {
                 const Icon = getAccountIconComponent(acc);
                 const isEditing = editingAccountId === acc.id;
+                const accHoldings = holdings.filter((h) => h.account_id === acc.id);
+                const showHoldings = accHoldings.length > 0 || holdingsOpen.has(acc.id);
 
                 return (
                   <div
@@ -180,6 +193,20 @@ export default function AccountsPage() {
                       </div>
 
                       <div className="flex items-center space-x-1">
+                        {accHoldings.length === 0 && (
+                          <button
+                            onClick={() => setHoldingsOpen((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(acc.id)) next.delete(acc.id); else next.add(acc.id);
+                              return next;
+                            })}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg touch-target"
+                            title="Track investments"
+                            aria-label="Track investments"
+                          >
+                            <TrendingUp className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             if (isEditing) {
@@ -257,6 +284,10 @@ export default function AccountsPage() {
                         </div>
                       )}
                     </div>
+
+                    {showHoldings && (
+                      <HoldingsPanel accountId={acc.id} holdings={accHoldings} onChange={loadHoldings} />
+                    )}
                   </div>
                 );
               })}
