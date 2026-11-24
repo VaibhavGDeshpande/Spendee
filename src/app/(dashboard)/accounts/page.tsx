@@ -193,20 +193,6 @@ export default function AccountsPage() {
                       </div>
 
                       <div className="flex items-center space-x-1">
-                        {accHoldings.length === 0 && (
-                          <button
-                            onClick={() => setHoldingsOpen((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(acc.id)) next.delete(acc.id); else next.add(acc.id);
-                              return next;
-                            })}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg touch-target"
-                            title="Track investments"
-                            aria-label="Track investments"
-                          >
-                            <TrendingUp className="w-4 h-4" />
-                          </button>
-                        )}
                         <button
                           onClick={() => {
                             if (isEditing) {
@@ -285,8 +271,15 @@ export default function AccountsPage() {
                       )}
                     </div>
 
-                    {showHoldings && (
+                    {showHoldings ? (
                       <HoldingsPanel accountId={acc.id} holdings={accHoldings} onChange={loadHoldings} />
+                    ) : !acc.is_system && (
+                      <button
+                        onClick={() => setHoldingsOpen((prev) => new Set(prev).add(acc.id))}
+                        className="self-start text-xs font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5" /> Track investments
+                      </button>
                     )}
                   </div>
                 );
