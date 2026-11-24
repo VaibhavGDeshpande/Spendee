@@ -1,36 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ISIN_RE, YAHOO_UA, searchSymbol } from '@/lib/yahoo';
 
 // Yahoo Finance public endpoints: keyless, cover XETRA/gettex listings and ISIN lookup
 // (what a Scalable Capital depot holds). Upstream fetches are cached 5 min per symbol.
-// shortcut: unofficial API with no SLA, swap for a keyed provider (server-only env var) if it starts rate-limiting.
 const QUOTE_TTL = 300;
-const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; Spendee/1.0)' };
 const SYMBOL_RE = /^[A-Z0-9.\-^=]{1,20}$/;
-const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
-
-// Look up an ISIN or company name (e.g. "NVIDIA") and pick a tradeable listing.
-async function searchSymbol(input: string): Promise<string | null> {
-  const res = await fetch(
-    `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(input)}&quotesCount=10&newsCount=0`,
-    { headers: UA, next: { revalidate: 86400 } },
-  );
-  if (!res.ok) return null;
-  type Hit = { symbol?: string; quoteType?: string; shortname?: string; longname?: string };
-  const isIsin = ISIN_RE.test(input);
-  const symbols = ((await res.json())?.quotes ?? [])
-    .filter((q: Hit) => q.symbol && ['EQUITY', 'ETF', 'MUTUALFUND'].includes(q.quoteType ?? ''))
-    // Name searches are fuzzy ("ANTHROPIC" returns ANT, ANTO…): require the name to match, never misprice.
-    .filter((q: Hit) => isIsin || `${q.shortname ?? ''} ${q.longname ?? ''}`.toUpperCase().includes(input))
-    .map((q: Hit) => q.symbol as string);
-  // Prefer a XETRA (EUR) listing, then any other German exchange, then whatever Yahoo ranks first.
-  return symbols.find((s: string) => s.endsWith('.DE')) ?? symbols.find((s: string) => /\.(F|SG|MU|BE|DU|HM)$/.test(s)) ?? symbols[0] ?? null;
-}
 
 async function fetchChart(symbol: string) {
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`,
-    { headers: UA, next: { revalidate: QUOTE_TTL } },
+    { headers: YAHOO_UA, next: { revalidate: QUOTE_TTL } },
   );
   if (!res.ok) return null;
   return (await res.json())?.chart?.result?.[0]?.meta ?? null;

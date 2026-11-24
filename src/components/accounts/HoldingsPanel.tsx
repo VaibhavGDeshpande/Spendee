@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Edit2, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { Edit2, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Holding } from '@/types';
-import { createHolding, updateHolding, deleteHolding, valuePortfolio, Quote } from '@/lib/holdings';
+import { deleteHolding, valuePortfolio, Quote } from '@/lib/holdings';
+import HoldingModal from './HoldingModal';
 
 const REFRESH_MS = 5 * 60 * 1000; // matches /api/quotes upstream cache
 
 const eur = (n: number) => `€${n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const num = (s: string) => parseFloat(s.replace(',', '.'));
 
 interface Props {
   accountId: string;
@@ -21,10 +21,8 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
   const [missing, setMissing] = useState<string[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  // null = closed, 'new' = adding, otherwise holding id being edited
-  const [formId, setFormId] = useState<string | null>(null);
-  const [form, setForm] = useState({ symbol: '', quantity: '', price: '' });
-  const [error, setError] = useState<string | null>(null);
+  // null = closed; { holding } = editing; {} = adding
+  const [modal, setModal] = useState<{ holding?: Holding } | null>(null);
 
   const symbolsKey = [...new Set(holdings.map((h) => h.symbol))].sort().join(',');
 
@@ -54,27 +52,6 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
     };
   }, [loadQuotes]);
 
-  const openForm = (h?: Holding) => {
-    setError(null);
-    setFormId(h ? h.id : 'new');
-    setForm(h
-      ? { symbol: h.symbol, quantity: String(h.quantity), price: String(h.avg_buy_price_eur) }
-      : { symbol: '', quantity: '', price: '' });
-  };
-
-  const save = async () => {
-    const params = { symbol: form.symbol, quantity: num(form.quantity), avg_buy_price_eur: num(form.price) };
-    const res = formId === 'new'
-      ? await createHolding({ ...params, account_id: accountId })
-      : await updateHolding(formId!, params);
-    if (!res.success) {
-      setError(res.error || 'Could not save');
-      return;
-    }
-    setFormId(null);
-    onChange();
-  };
-
   const remove = async (h: Holding) => {
     if (!confirm(`Remove ${h.symbol} from this account?`)) return;
     if (await deleteHolding(h.id)) onChange();
@@ -82,7 +59,6 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
 
   const { marketValue, costBasis, gain, gainPct } = valuePortfolio(holdings, quotes);
   const gainClass = gain >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
-  const inputClass = 'w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-950 border rounded-lg text-xs font-semibold text-slate-900 dark:text-white';
 
   return (
     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
@@ -126,10 +102,10 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
           return (
             <li key={h.id} className="flex items-center justify-between text-xs gap-2">
               <div className="min-w-0">
-                <p className="font-semibold text-slate-900 dark:text-white truncate" title={q?.name}>{h.symbol}</p>
+                <p className="font-semibold text-slate-900 dark:text-white truncate" title={q?.name}>{q?.name ?? h.symbol}</p>
                 <p className="text-slate-400">
                   {h.quantity} × {q ? eur(q.price_eur) : '—'}
-                  {q?.resolved_symbol && q.resolved_symbol !== h.symbol && ` · ${q.resolved_symbol}`}
+                  {' · '}{q?.resolved_symbol ?? h.symbol}
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
@@ -141,7 +117,7 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
                     </p>
                   )}
                 </div>
-                <button onClick={() => openForm(h)} className="p-1 text-slate-400 hover:text-indigo-600" aria-label={`Edit ${h.symbol}`}>
+                <button onClick={() => setModal({ holding: h })} className="p-1 text-slate-400 hover:text-indigo-600" aria-label={`Edit ${h.symbol}`}>
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => remove(h)} className="p-1 text-slate-400 hover:text-rose-600" aria-label={`Remove ${h.symbol}`}>
@@ -153,47 +129,12 @@ export default function HoldingsPanel({ accountId, holdings, onChange }: Props) 
         })}
       </ul>
 
-      {formId ? (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <input
-              className={inputClass}
-              placeholder="Ticker / ISIN"
-              aria-label="Ticker or ISIN"
-              value={form.symbol}
-              onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-            />
-            <input
-              className={inputClass}
-              placeholder="Qty"
-              aria-label="Quantity"
-              inputMode="decimal"
-              value={form.quantity}
-              onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-            />
-            <input
-              className={inputClass}
-              placeholder="Avg € price"
-              aria-label="Average buy price in EUR"
-              inputMode="decimal"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-            />
-          </div>
-          {error && <p className="text-[11px] text-rose-600">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={save} className="px-3 py-1.5 bg-indigo-600 text-white font-semibold rounded-lg text-xs flex items-center gap-1">
-              <Check className="w-3.5 h-3.5" /> Save
-            </button>
-            <button onClick={() => setFormId(null)} className="px-3 py-1.5 text-slate-500 rounded-lg text-xs flex items-center gap-1">
-              <X className="w-3.5 h-3.5" /> Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button onClick={() => openForm()} className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-          <Plus className="w-3.5 h-3.5" /> Add holding
-        </button>
+      <button onClick={() => setModal({})} className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+        <Plus className="w-3.5 h-3.5" /> Add holding
+      </button>
+
+      {modal && (
+        <HoldingModal accountId={accountId} holding={modal.holding} onClose={() => setModal(null)} onSaved={onChange} />
       )}
     </div>
   );
