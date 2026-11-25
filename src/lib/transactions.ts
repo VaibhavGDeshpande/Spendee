@@ -167,8 +167,59 @@ export async function updateTransaction(
   id: string,
   params: Partial<CreateTransactionParams>
 ): Promise<{ success: boolean; error?: string }> {
-  // If it's a transfer, we'd theoretically need to update both. For simplicity, just update the target.
-  const success = await updateSupabaseTransaction(id, params);
+  const before = ((await fetchSupabaseTransactions()) || []).find((t) => t.id === id);
+
+  // Partial edits (e.g. notes only) and edits of a transfer's credit row don't touch the pairing
+  if (!params.type || before?.transfer_transaction_id) {
+    delete params.transfer_account_id;
+    const ok = await updateSupabaseTransaction(id, params);
+    return ok ? { success: true } : { success: false, error: 'Failed to update transaction' };
+  }
+
+  const isTransfer = params.type === 'transfer';
+  if (isTransfer && (!params.transfer_account_id || params.transfer_account_id === params.account_id)) {
+    return { success: false, error: 'Choose a different destination account for the transfer' };
+  }
+
+  const success = await updateSupabaseTransaction(id, {
+    ...params,
+    // undefined is dropped from the update, so clear it explicitly when no longer a transfer
+    transfer_account_id: isTransfer ? params.transfer_account_id : (null as unknown as undefined),
+  });
   if (!success) return { success: false, error: 'Failed to update transaction' };
+
+  // The destination's credit row is linked via transfer_transaction_id; keep it in sync
+  const transactions = (await fetchSupabaseTransactions()) || [];
+  const linkedDest = transactions.find((t) => t.transfer_transaction_id === id);
+
+  if (!isTransfer) {
+    if (linkedDest && !(await deleteSupabaseTransaction(linkedDest.id))) {
+      return { success: false, error: 'Failed to remove the linked transfer credit' };
+    }
+    return { success: true };
+  }
+
+  const source = transactions.find((t) => t.id === id);
+  if (!source) return { success: false, error: 'Transaction not found after update' };
+
+  const destParams: CreateTransactionParams = {
+    account_id: params.transfer_account_id!,
+    category_id: null,
+    type: 'income',
+    amount: source.amount_in_eur,
+    currency: 'EUR',
+    amount_in_eur: source.amount_in_eur,
+    exchange_rate_used: 1.0,
+    merchant: `Transfer from ${source.account?.name ?? 'account'}`,
+    transaction_date: source.transaction_date,
+    notes: source.notes || undefined,
+    transfer_account_id: source.account_id,
+    transfer_transaction_id: id,
+  };
+
+  const destOk = linkedDest
+    ? await updateSupabaseTransaction(linkedDest.id, destParams)
+    : await insertSupabaseTransaction(destParams, createId());
+  if (!destOk) return { success: false, error: 'Failed to update the transfer destination' };
   return { success: true };
 }

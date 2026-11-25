@@ -5,9 +5,9 @@ import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from '@/components/layout/BottomNav';
 import ChartsWidget from '@/components/dashboard/ChartsWidget';
-import { BarChart3, Filter } from 'lucide-react';
 import AddTransactionModal from '@/components/transactions/AddTransactionModal';
 import { useAppData } from '@/context/AppDataContext';
+import './analytics.css';
 
 export default function AnalyticsPage() {
   const { accounts, transactions, loading, refresh } = useAppData();
@@ -15,12 +15,18 @@ export default function AnalyticsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
 
-  const filteredTransactions = selectedAccountId 
+  const filteredTransactions = selectedAccountId
     ? transactions.filter(t => t.account_id === selectedAccountId || t.transfer_account_id === selectedAccountId)
     : transactions;
 
+  const accountName = accounts.find((a) => a.id === selectedAccountId)?.name;
+  const hasExpenses = filteredTransactions.some((t) => t.type === 'expense');
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 md:pb-8">
+    <div className="hm">
+      {/* React 19 hoists this into the head; the fallback stack covers it failing to load */}
+      <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600&display=swap" precedence="default" />
+
       <Sidebar
         onOpenAddModal={() => setIsAddModalOpen(true)}
         showConverter={showConverter}
@@ -31,61 +37,54 @@ export default function AnalyticsPage() {
         <Header />
       </div>
 
-      <main className="md:pl-64 max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 space-y-5">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 text-indigo-500" />
-            Analytics
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Deep dive into your spending habits and statistics
-          </p>
-        </div>
-
-        {/* Account Filter Chips */}
-        <div className="flex space-x-2 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => setSelectedAccountId('')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all ${
-              selectedAccountId === ''
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-            }`}
-          >
-            All Accounts
-          </button>
-          {accounts.map((acc) => (
-            <button
-              key={acc.id}
-              onClick={() => setSelectedAccountId(acc.id)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 transition-all ${
-                selectedAccountId === acc.id
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800'
-              }`}
-            >
-              {acc.name}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="h-64 bg-slate-200 dark:bg-slate-800 rounded-3xl animate-pulse" />
-        ) : filteredTransactions.filter(t => t.type === 'expense').length === 0 ? (
-          <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-6 space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center mx-auto">
-              <Filter className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-slate-800 dark:text-slate-200">No Expenses Found</h3>
-            <p className="text-xs text-slate-400">
-              There are no expenses in this account to analyze.
+      <main className="hm-main md:pl-64">
+        <div className="hm-wrap">
+          <header>
+            <h1>Analytics</h1>
+            <p className="hm-sub">
+              {accountName ? `Spending from ${accountName} this month.` : 'Spending across all your accounts this month.'}
             </p>
+          </header>
+
+          <div className="hm-chips" role="group" aria-label="Account">
+            <button type="button" className="hm-chip" aria-pressed={selectedAccountId === ''} onClick={() => setSelectedAccountId('')}>
+              All accounts
+            </button>
+            {accounts.map((acc) => (
+              <button
+                key={acc.id}
+                type="button"
+                className="hm-chip"
+                aria-pressed={selectedAccountId === acc.id}
+                onClick={() => setSelectedAccountId(acc.id)}
+              >
+                {acc.name}
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="pt-2">
+
+          {loading ? (
+            <div role="status" aria-label="Loading analytics" style={{ display: 'grid', gap: 'var(--space-xl)' }}>
+              <div className="hm-skel" style={{ height: '8rem' }} />
+              <div className="hm-skel" style={{ height: '17.5rem' }} />
+              <div className="hm-skel" style={{ height: '12rem' }} />
+            </div>
+          ) : !hasExpenses ? (
+            <section className="hm-empty">
+              <h2>No expenses to analyze yet</h2>
+              <p>
+                {accountName
+                  ? `${accountName} has no expenses. Record one and the month's spending appears here.`
+                  : 'Record an expense and the month’s spending, categories and merchants appear here.'}
+              </p>
+              <button type="button" className="hm-btn" onClick={() => setIsAddModalOpen(true)}>
+                Add an expense
+              </button>
+            </section>
+          ) : (
             <ChartsWidget transactions={filteredTransactions} />
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
       <div className="md:hidden">

@@ -1,179 +1,233 @@
 'use client';
 
+import { useMemo } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, Tooltip, XAxis, YAxis } from 'recharts';
 import { TransactionWithDetails } from '@/types';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
-import { useMemo, useState } from 'react';
-import { BarChart3, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
 
 interface ChartsWidgetProps {
   transactions: TransactionWithDetails[];
 }
 
+const eur = (n: number) =>
+  `€${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Read the date from the string so a timezone can never move a transaction to the next day.
+const parseDay = (iso: string) => {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return { y, m, d };
+};
+
+function DayTip({ active, payload }: { active?: boolean; payload?: { payload: { label: string; amount: number } }[] }) {
+  if (!active || !payload?.length) return null;
+  const { label, amount } = payload[0].payload;
+  return (
+    <div className="hm-tip">
+      <strong className="hm-num">{eur(amount)}</strong>
+      {label}
+    </div>
+  );
+}
+
 export default function ChartsWidget({ transactions }: ChartsWidgetProps) {
-  const [chartType, setChartType] = useState<'daily' | 'category' | 'pie'>('daily');
-
-  const { dailyData, categoryData } = useMemo(() => {
-    // Process expenses only
-    const expenses = transactions.filter(t => t.type === 'expense');
-    
-    // Daily processing for current month
+  const r = useMemo(() => {
     const now = new Date();
-    const currentMonthTxs = expenses.filter(t => {
-      const d = new Date(t.transaction_date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const today = now.getDate();
+    const prev = new Date(y, m - 2, 1);
+    const monthName = now.toLocaleDateString('en-GB', { month: 'long' });
+    const prevName = prev.toLocaleDateString('en-GB', { month: 'long' });
 
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const dailyMap: Record<number, number> = {};
-    for (let i = 1; i <= daysInMonth; i++) dailyMap[i] = 0;
-
-    currentMonthTxs.forEach(t => {
-      const day = new Date(t.transaction_date).getDate();
-      dailyMap[day] += t.amount_in_eur;
-    });
-
-    const dailyArr = Object.keys(dailyMap).map(day => ({
-      day: parseInt(day),
-      amount: parseFloat(dailyMap[parseInt(day)].toFixed(2))
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const days = Array.from({ length: daysInMonth }, (_, i) => ({
+      day: i + 1,
+      amount: 0,
+      label: new Date(y, m - 1, i + 1).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
     }));
 
-    // Category processing for all time or current month
-    const catMap: Record<string, { name: string, amount: number, color: string }> = {};
-    currentMonthTxs.forEach(t => {
-      const catName = t.category?.name || 'Other';
-      if (!catMap[catName]) {
-        catMap[catName] = { name: catName, amount: 0, color: t.category?.color || '#6366f1' };
-      }
-      catMap[catName].amount += t.amount_in_eur;
-    });
+    const cats = new Map<string, { amount: number; color: string | null }>();
+    const merchants = new Map<string, { name: string; amount: number; visits: number }>();
+    let total = 0;
+    let count = 0;
+    let prevSameDays = 0;
 
-    const catArr = Object.values(catMap).sort((a, b) => b.amount - a.amount).map(c => ({
-      ...c,
-      amount: parseFloat(c.amount.toFixed(2))
-    }));
+    for (const t of transactions) {
+      if (t.type !== 'expense') continue;
+      const { y: ty, m: tm, d: td } = parseDay(t.transaction_date);
+      if (ty === prev.getFullYear() && tm === prev.getMonth() + 1 && td <= today) prevSameDays += t.amount_in_eur;
+      if (ty !== y || tm !== m) continue;
 
-    return { dailyData: dailyArr, categoryData: catArr };
+      total += t.amount_in_eur;
+      count += 1;
+      days[td - 1].amount += t.amount_in_eur;
+
+      const cat = t.category?.name || 'Other';
+      const c = cats.get(cat) ?? { amount: 0, color: t.category?.color ?? null };
+      c.amount += t.amount_in_eur;
+      cats.set(cat, c);
+
+      const mName = t.merchant?.trim() || 'No merchant';
+      const key = mName.toLowerCase();
+      const mm = merchants.get(key) ?? { name: mName, amount: 0, visits: 0 };
+      mm.amount += t.amount_in_eur;
+      mm.visits += 1;
+      merchants.set(key, mm);
+    }
+
+    const peak = days.reduce((best, d) => (d.amount > best.amount ? d : best), days[0]);
+    return {
+      monthName,
+      prevName,
+      today,
+      daysInMonth,
+      days,
+      total,
+      count,
+      prevSameDays,
+      average: total / today,
+      peak: peak.amount > 0 ? peak : null,
+      categories: [...cats.entries()]
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.amount - a.amount),
+      merchants: [...merchants.values()].sort((a, b) => b.amount - a.amount).slice(0, 6),
+    };
   }, [transactions]);
 
-  return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-          Spending Analytics
-        </h3>
-        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-          <button
-            onClick={() => setChartType('daily')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-              chartType === 'daily'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>Daily</span>
-          </button>
-          <button
-            onClick={() => setChartType('category')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-              chartType === 'category'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Categories</span>
-          </button>
-          <button
-            onClick={() => setChartType('pie')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-              chartType === 'pie'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
-          >
-            <PieChartIcon className="w-3.5 h-3.5" />
-            <span>Pie</span>
-          </button>
-        </div>
-      </div>
+  const delta = r.total - r.prevSameDays;
+  const note =
+    r.total === 0
+      ? `Nothing spent yet in ${r.monthName}.`
+      : r.prevSameDays === 0
+        ? `No spending recorded in ${r.prevName} to compare with.`
+        : Math.abs(delta) < 0.005
+          ? `The same as the first ${r.today} days of ${r.prevName}.`
+          : `${eur(Math.abs(delta))} ${delta > 0 ? 'more' : 'less'} than the first ${r.today} days of ${r.prevName}.`;
 
-      <div className="h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          {chartType === 'daily' ? (
-            <AreaChart data={dailyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-              <Tooltip
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                labelFormatter={(val) => `Day ${val}`}
-                formatter={(val: any) => [`€${val}`, 'Spent']}
+  const chartLabel = r.peak
+    ? `Daily spending in ${r.monthName}. The highest day was ${r.peak.label}, ${eur(r.peak.amount)}.`
+    : `Daily spending in ${r.monthName}. Nothing spent yet.`;
+  const ticks = [1, 5, 10, 15, 20, 25, r.daysInMonth].filter((d, i, a) => a.indexOf(d) === i && d <= r.daysInMonth);
+
+  return (
+    <>
+      <section className="hm-summary" aria-label={`Spending in ${r.monthName}`}>
+        <div>
+          <p className="hm-figure-label">Spent in {r.monthName}</p>
+          <p className="hm-figure">{eur(r.total)}</p>
+          <p className="hm-figure-note">{note}</p>
+        </div>
+        <dl className="hm-stats">
+          <div>
+            <dt>Daily average</dt>
+            <dd className="hm-num">{eur(r.average)}</dd>
+          </div>
+          <div>
+            <dt>Highest day</dt>
+            <dd className="hm-num">{r.peak ? `${eur(r.peak.amount)} on ${r.peak.day} ${r.monthName.slice(0, 3)}` : 'None yet'}</dd>
+          </div>
+          <div>
+            <dt>Expenses recorded</dt>
+            <dd className="hm-num">{r.count}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="hm-section">
+        <h2>Spending by day</h2>
+        <div className="hm-chart" role="img" aria-label={chartLabel}>
+          <BarChart responsive style={{ width: '100%', height: '100%' }} data={r.days} margin={{ top: 8, right: 0, left: 0, bottom: 0 }} barCategoryGap={2}>
+              <CartesianGrid vertical={false} stroke="var(--color-rule)" />
+              <XAxis
+                dataKey="day"
+                ticks={ticks}
+                interval={0}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: 'var(--color-muted)', fontSize: 12 }}
               />
-              <Area type="monotone" dataKey="amount" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorAmount)" />
-            </AreaChart>
-          ) : chartType === 'category' ? (
-            <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-              <Tooltip
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                cursor={{ fill: '#f1f5f9', opacity: 0.1 }}
-                formatter={(val: any) => [`€${val}`, 'Spent']}
+              <YAxis
+                width={48}
+                tickCount={4}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: 'var(--color-muted)', fontSize: 12 }}
+                tickFormatter={(v: number) => `€${v}`}
               />
-              <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                {
-                  categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))
-                }
-              </Bar>
-            </BarChart>
-          ) : (
-            <PieChart>
-              <Pie
-                data={categoryData}
-                dataKey="amount"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={5}
-                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-              >
-                {categoryData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+              <Tooltip content={<DayTip />} cursor={{ fill: 'var(--color-paper-2)' }} />
+              <Bar dataKey="amount" radius={[2, 2, 0, 0]} maxBarSize={16} isAnimationActive={false}>
+                {r.days.map((d) => (
+                  <Cell key={d.day} fill={r.peak?.day === d.day ? 'var(--color-accent-2)' : 'var(--color-muted)'} />
                 ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                formatter={(val: any) => [`€${val}`, 'Spent']}
-              />
-            </PieChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-    </div>
+              </Bar>
+          </BarChart>
+        </div>
+        <p className="hm-caption">
+          {r.peak ? `The highest day, ${r.peak.label}, is marked.` : 'Days fill in as you record expenses.'}
+        </p>
+      </section>
+
+      {r.total > 0 && (
+        <div className="hm-split">
+          <section className="hm-section" aria-labelledby="hm-cats">
+            <h2 id="hm-cats">Categories</h2>
+            <table className="hm-table">
+              <thead>
+                <tr>
+                  <th scope="col">Category</th>
+                  <th scope="col" className="hm-r">Spent</th>
+                  <th scope="col" className="hm-r">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.categories.map((c) => {
+                  const pct = (c.amount / r.total) * 100;
+                  return (
+                    <tr key={c.name}>
+                      <td>
+                        <span className="hm-name">
+                          <span className="hm-swatch" style={{ background: c.color ?? 'var(--color-muted)' }} aria-hidden="true" />
+                          <span>{c.name}</span>
+                        </span>
+                      </td>
+                      <td className="hm-r hm-num">{eur(c.amount)}</td>
+                      <td className="hm-r">
+                        <span className="hm-share">
+                          <span className="hm-track" aria-hidden="true">
+                            <span className="hm-fill" style={{ width: `${pct}%` }} />
+                          </span>
+                          <span className="hm-num">{pct.toFixed(0)}%</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="hm-section" aria-labelledby="hm-merchants">
+            <h2 id="hm-merchants">Merchants</h2>
+            <table className="hm-table">
+              <thead>
+                <tr>
+                  <th scope="col">Merchant</th>
+                  <th scope="col" className="hm-r">Visits</th>
+                  <th scope="col" className="hm-r">Spent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.merchants.map((mm) => (
+                  <tr key={mm.name}>
+                    <td><span className="hm-name"><span>{mm.name}</span></span></td>
+                    <td className="hm-r hm-num">{mm.visits}</td>
+                    <td className="hm-r hm-num">{eur(mm.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
